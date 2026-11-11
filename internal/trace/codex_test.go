@@ -80,7 +80,7 @@ func TestParseCodexReadOnlyIsDenied(t *testing.T) {
 
 func TestParseCodexWarningIsNotAStep(t *testing.T) {
 	r := parseCodexFile(t, "codex-warning.jsonl")
-	if len(r.Steps) != 4 || r.Steps[0].Line != "pwd && rg --files -g '\"'!*vendor*'\"' | sed -n '1,160p' && go test ./..." {
+	if len(r.Steps) != 4 || r.Steps[0].Line != "pwd && rg --files -g '!*vendor*' | sed -n '1,160p' && go test ./..." {
 		t.Fatalf("steps: %+v", r.Steps)
 	}
 	if !r.Steps[1].IsError || r.Steps[1].Denied { // exit 128 is a failure, not a sandbox refusal
@@ -171,5 +171,74 @@ func TestLoadRunPicksParserByAgent(t *testing.T) {
 	write("meta.json", `{"id":"run-01","agent":"claude","model":"haiku"}`)
 	if r, err = LoadRun(dir); err != nil || len(r.Steps) != 0 || r.StopReason != "incomplete" {
 		t.Fatalf("a codex trace read as claude has no steps: %+v, %v", r, err)
+	}
+}
+
+func TestSkillReads(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want []string
+	}{
+		{`/bin/zsh -lc "pwd && sed -n '1,240p' .agents/skills/go-test-fixer/SKILL.md"`, []string{"go-test-fixer"}},
+		{`cat ~/.codex/skills/a/SKILL.md ~/.codex/skills/b/SKILL.md; rg x /w/skills/a/SKILL.md`, []string{"a", "b"}},
+		{`head -5 .agents/skills/x/SKILL.md | grep name`, []string{"x"}},
+		{`ls ~/.codex/skills/*/SKILL.md`, nil},
+		{`cat ~/.codex/skills/*/SKILL.md`, nil},
+		{`cat ~/.codex/skills/$NAME/SKILL.md`, nil},
+		{`echo see /skills/foo/SKILL.md`, nil},
+		{`rm .agents/skills/foo/SKILL.md`, nil},
+		{`cat > .agents/skills/foo/SKILL.md`, nil},
+		{`cat >> .agents/skills/foo/SKILL.md`, nil},
+		{`cat >.agents/skills/foo/SKILL.md`, nil},
+		{`test -f .agents/skills/foo/SKILL.md`, nil},
+		{`ls /skills/foo/SKILL.md && echo ok`, nil},
+		{`/bin/zsh -lc "ls; cat x.go"`, nil},
+	}
+	for _, c := range cases {
+		if got := SkillReads(c.cmd); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("%s: got %v, want %v", c.cmd, got, c.want)
+		}
+	}
+	// A listing is a shell step, not a skill.
+	r, _ := ParseCodex(strings.NewReader(`{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"ls ~/.codex/skills/*/SKILL.md","exit_code":0,"status":"completed"}}` + "\n"))
+	if r.Steps[0].Kind != "shell" || r.Skills != nil {
+		t.Errorf("%+v", r.Steps[0])
+	}
+}
+
+func TestUnwrapShell(t *testing.T) {
+	cases := map[string]string{
+		`/bin/zsh -lc "sed -n '1,240p' cart.go; sed -n '1,240p' stats.go; sed -n '1,240p' text.go"`: `sed -n '1,240p' cart.go; sed -n '1,240p' stats.go; sed -n '1,240p' text.go`,
+		`/bin/zsh -lc "pwd && rg --files -g '"'!*_test.go'"' -g '"'!vendor'"' | sed -n '1,200p'"`:   `pwd && rg --files -g '!*_test.go' -g '!vendor' | sed -n '1,200p'`,
+		`/bin/zsh -lc 'gofmt -w calc.go && go test ./...'`:                                          `gofmt -w calc.go && go test ./...`,
+		`/bin/sh -lc ls`: `ls`,
+		`ls -la`:         `ls -la`, // no wrapper
+		// Not one plain quoted string: left with its quotes.
+		`/bin/zsh -lc "echo "a" && echo "b""`: `"echo "a" && echo "b""`,
+		`/bin/zsh -lc 'echo '\''x'\'''`:       `'echo '\''x'\'''`,
+	}
+	for in, want := range cases {
+		if got := unwrapShell(in); got != want {
+			t.Errorf("%s\n got %s\nwant %s", in, got, want)
+		}
+	}
+}
+
+func TestParseCodexFileChangeNotCompletedIsDenied(t *testing.T) {
+	r, _ := ParseCodex(strings.NewReader(`{"type":"item.completed","item":{"id":"a","type":"file_change","changes":[{"path":"/work/a.go","kind":"update"}],"status":"failed"}}` + "\n" +
+		`{"type":"item.completed","item":{"id":"b","type":"file_change","changes":[{"path":"/work/a.go","kind":"update"}],"status":"completed"}}` + "\n"))
+	if !r.Steps[0].Denied || r.Steps[1].Denied || !reflect.DeepEqual(r.Denials, []string{"Edit"}) {
+		t.Errorf("%+v", r.Steps)
+	}
+}
+
+func TestParseCodexSkipsLinesOfTheWrongShape(t *testing.T) {
+	in := `{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"ls","exit_code":"1","status":"failed"}}` + "\n" +
+		`{"type":"turn.completed","usage":{"input_tokens":1.5,"output_tokens":2}}` + "\n" +
+		`{"type":"item.completed","item":{"id":"b","type":"command_execution","command":"pwd","exit_code":0,"status":"completed"}}` + "\n" +
+		`{"type":"turn.completed","usage":{"input_tokens":7,"output_tokens":2}}` + "\n"
+	r, err := ParseCodex(strings.NewReader(in))
+	if err != nil || len(r.Steps) != 1 || r.Steps[0].Line != "pwd" || r.TokensIn != 7 || r.Turns != 1 {
+		t.Errorf("%+v, %v", r, err)
 	}
 }

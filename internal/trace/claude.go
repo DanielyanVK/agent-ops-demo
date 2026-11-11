@@ -211,6 +211,8 @@ func stepLine(tool string, input json.RawMessage) string {
 		FilePath string `json:"file_path"`
 		Command  string `json:"command"`
 		Pattern  string `json:"pattern"`
+		Query    string `json:"query"`
+		URL      string `json:"url"`
 	}
 	_ = json.Unmarshal(input, &in)
 	var s string
@@ -221,6 +223,10 @@ func stepLine(tool string, input json.RawMessage) string {
 		s, _, _ = strings.Cut(in.Command, "\n")
 	case "Grep", "Glob":
 		s = in.Pattern
+	case "WebSearch":
+		s = in.Query
+	case "WebFetch":
+		s = in.URL
 	}
 	return s
 }

@@ -359,3 +359,35 @@ func TestDemoPluginIsWellFormed(t *testing.T) {
 		t.Errorf("SKILL.md: %v", err)
 	}
 }
+
+func TestSanitizeCodexHidesSkillText(t *testing.T) {
+	read := sanitizeCodex(`{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"/bin/zsh -lc \"sed -n '1,200p' .agents/skills/go-test-fixer/SKILL.md\"","aggregated_output":"# secret skill body","exit_code":0,"status":"completed"}}`)
+	if strings.Contains(read, "secret skill body") || !strings.Contains(read, "[текст навыка не сохраняется]") || !strings.Contains(read, "go-test-fixer") {
+		t.Errorf("skill text kept: %s", read)
+	}
+	// A listing is not a read: its output stays.
+	ls := sanitizeCodex(`{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"ls .agents/skills/x/SKILL.md","aggregated_output":".agents/skills/x/SKILL.md","exit_code":0,"status":"completed"}}`)
+	if strings.Contains(ls, "не сохраняется") {
+		t.Errorf("listing hidden: %s", ls)
+	}
+}
+
+func TestSanitizeCodexNumberShapes(t *testing.T) {
+	for _, in := range []string{
+		`{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"x","exit_code":1.5,"status":"failed"}}`,
+		`{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"x","exit_code":1e0,"status":"failed"}}`,
+	} {
+		if got := sanitizeCodex(in); strings.Contains(got, "exit_code") {
+			t.Errorf("non-integer exit code kept: %s", got)
+		}
+	}
+	if got := sanitizeCodex(`{"type":"item.started","item":{"id":"a","type":"command_execution"}}`); got == "" {
+		t.Error("started dropped")
+	}
+	if got := sanitizeCodex(`{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"x","exit_code":null,"status":"in_progress"}}`); !strings.Contains(got, `"exit_code":null`) {
+		t.Errorf("null exit code lost: %s", got)
+	}
+	if got := sanitizeCodex(`{"type":"turn.completed","usage":{"input_tokens":1.5,"output_tokens":null,"reasoning_output_tokens":3}}`); strings.Contains(got, "1.5") || strings.Contains(got, "null") || !strings.Contains(got, `"reasoning_output_tokens":3`) {
+		t.Errorf("token shapes: %s", got)
+	}
+}

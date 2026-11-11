@@ -44,7 +44,42 @@ type codexLine struct {
 var (
 	shellWrapper = regexp.MustCompile(`^/bin/(?:zsh|bash|sh) -lc `)
 	skillPath    = regexp.MustCompile(`/skills/([^/\s'"]+)/SKILL\.md`)
+	segmentSplit = regexp.MustCompile(`&&|\|\||;|\|`)
+	// quoteIdiom is how a shell script with single quotes inside double quotes
+	// is written: '"'text'"' stands for 'text'.
+	quoteIdiom = regexp.MustCompile(`'"'([^'"]*)'"'`)
 )
+
+var skillReaders = []string{"cat", "sed", "head", "tail", "less", "bat", "nl", "awk", "rg", "grep"}
+
+// SkillReads returns the names of the skills a Codex shell command reads: a
+// segment of the command (split on && || ; |) must start with a reader and
+// name a path .../skills/<name>/SKILL.md that is not a redirect target. Writes,
+// listings, globs and tests of such a path are not reads. The sanitizer and the
+// parser both use it.
+func SkillReads(command string) []string {
+	var names []string
+	for _, seg := range segmentSplit.Split(unwrapShell(command), -1) {
+		f := strings.Fields(seg)
+		if len(f) == 0 || !slices.Contains(skillReaders, f[0]) {
+			continue
+		}
+		for _, m := range skillPath.FindAllStringSubmatchIndex(seg, -1) {
+			name := seg[m[2]:m[3]]
+			if strings.ContainsAny(name, "*?[<$") || redirected(seg[:m[0]]) || slices.Contains(names, name) {
+				continue
+			}
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// redirected: the path token that ends the prefix is the target of a > or >> redirect.
+func redirected(prefix string) bool {
+	start := strings.LastIndexAny(prefix, " \t") + 1
+	return strings.Contains(prefix[start:], ">") || strings.HasSuffix(strings.TrimRight(prefix[:start], " \t"), ">")
+}
 
 // ParseCodex reads `codex exec --json` lines as the runner records them (with
 // a "ts" added). The meta fields of Run come from meta.json, not from the trace.
@@ -63,10 +98,12 @@ func ParseCodex(r io.Reader) (Run, error) {
 		if raw = bytes.TrimSpace(raw); len(raw) > 0 {
 			var l codexLine
 			if jerr := json.Unmarshal(raw, &l); jerr != nil {
-				if err != io.EOF {
+				if json.Valid(raw) {
+					// A line of a kept type with a value of the wrong shape: skip it, keep the trace.
+				} else if err != io.EOF {
 					return run, fmt.Errorf("строка %d: %w", n, jerr)
 				}
-				// The writer may be mid-line on a live run; the run is just incomplete.
+				// else: the writer may be mid-line on a live run; the run is just incomplete.
 			} else {
 				ts, _ := time.Parse(time.RFC3339Nano, l.TS)
 				if !ts.IsZero() {
@@ -124,13 +161,7 @@ func codexStep(l *codexLine) (Step, bool) {
 		s.Line, _, _ = strings.Cut(unwrapShell(it.Command), "\n")
 		s.Input, s.Output = it.Command, it.AggregatedOutput
 		s.IsError = it.ExitCode != nil && *it.ExitCode != 0 || it.ExitCode == nil && it.Status == "failed"
-		var names []string
-		for _, m := range skillPath.FindAllStringSubmatch(it.Command, -1) {
-			if !slices.Contains(names, m[1]) {
-				names = append(names, m[1])
-			}
-		}
-		if len(names) > 0 {
+		if names := SkillReads(it.Command); len(names) > 0 {
 			s.Kind, s.Name = "skill", strings.Join(names, ", ")
 		}
 	case "file_change":
@@ -144,6 +175,7 @@ func codexStep(l *codexLine) (Step, bool) {
 			s.Input = string(b)
 		}
 		s.IsError = it.Status != "completed"
+		s.Denied = s.IsError // the item has no output to tell a refusal from another failure
 	case "mcp_tool_call":
 		s.Tool, s.Kind, s.Name = "MCP", "mcp", it.Server+"."+it.Tool
 		s.Line, s.Input = s.Name, s.Name
@@ -156,19 +188,30 @@ func codexStep(l *codexLine) (Step, bool) {
 	}
 	s.Summary = cut60(s.Line)
 	low := strings.ToLower(s.Output)
-	s.Denied = s.IsError && (strings.Contains(low, "operation not permitted") || strings.Contains(low, "read-only file system"))
+	s.Denied = s.Denied || s.IsError && (strings.Contains(low, "operation not permitted") || strings.Contains(low, "read-only file system"))
 	return s, true
 }
 
 // unwrapShell drops the `/bin/zsh -lc` wrapper Codex puts around every command
-// and the one pair of quotes around the script.
+// and the one pair of quotes around the script. A script that does not have
+// the expected shape is left as it is rather than guessed at.
 func unwrapShell(cmd string) string {
 	rest := shellWrapper.ReplaceAllString(cmd, "")
-	if rest == cmd {
+	if rest == cmd || len(rest) < 2 {
 		return cmd
 	}
-	if len(rest) >= 2 && (rest[0] == '"' || rest[0] == '\'') && rest[len(rest)-1] == rest[0] {
-		return rest[1 : len(rest)-1]
+	q := rest[0]
+	if (q != '"' && q != '\'') || rest[len(rest)-1] != q {
+		return rest
 	}
-	return rest
+	inner := rest[1 : len(rest)-1]
+	if q == '"' {
+		inner = quoteIdiom.ReplaceAllString(inner, "'$1'")
+		if strings.Contains(strings.ReplaceAll(inner, `\"`, ""), `"`) {
+			return rest // not one plain double-quoted string
+		}
+	} else if strings.Contains(inner, "'") {
+		return rest
+	}
+	return inner
 }

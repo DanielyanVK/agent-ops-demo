@@ -100,7 +100,7 @@ func TestSummaryTruncation(t *testing.T) {
 	if r := []rune(got); len(r) != 60 || r[59] != '…' {
 		t.Fatalf("got %q", got)
 	}
-	if stepLine("WebFetch", []byte(`{"url":"u"}`)) != "" {
+	if stepLine("TodoWrite", []byte(`{"url":"u"}`)) != "" {
 		t.Fatal("unknown tool must have empty summary")
 	}
 }
@@ -111,7 +111,8 @@ func TestStepLineIsUncut(t *testing.T) {
 		{"Bash", `{"command":"` + long + `\nsecond"}`, long},
 		{"Read", `{"file_path":"/work/a/b.go"}`, "a/b.go"},
 		{"Grep", `{"pattern":"func Mean"}`, "func Mean"},
-		{"WebFetch", `{"url":"u"}`, ""},
+		{"WebFetch", `{"url":"u"}`, "u"},
+		{"TodoWrite", `{"url":"u"}`, ""},
 	}
 	for _, c := range cases {
 		if got := stepLine(c.tool, []byte(c.in)); got != c.line {
@@ -369,5 +370,14 @@ func TestRecordedRunsKeepTheirShape(t *testing.T) {
 	kinds := []string{r.Steps[0].Kind, r.Steps[1].Kind, r.Steps[2].Kind}
 	if !reflect.DeepEqual(kinds, []string{"read", "shell", "edit"}) {
 		t.Errorf("kinds %v", kinds)
+	}
+}
+
+func TestStepLineOfWebTools(t *testing.T) {
+	if got := stepLine("WebSearch", []byte(`{"query":"go slices"}`)); got != "go slices" {
+		t.Errorf("WebSearch: %q", got)
+	}
+	if got := stepLine("WebFetch", []byte(`{"url":"https://example.com/x"}`)); got != "https://example.com/x" {
+		t.Errorf("WebFetch: %q", got)
 	}
 }

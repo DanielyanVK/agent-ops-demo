@@ -1,8 +1,11 @@
 package runner
 
 import (
+	"bytes"
 	"encoding/json"
 	"time"
+
+	"agentops/internal/trace"
 )
 
 // tsLayout: UTC, RFC 3339 with milliseconds.
@@ -16,15 +19,22 @@ var (
 		}
 		return r
 	}
-	num = func(r json.RawMessage) json.RawMessage {
-		var v *float64 // null is fine: exit_code of a command still running
-		if json.Unmarshal(r, &v) != nil {
+	// Integers only, as the parser reads them; exit_code may also be null (a command still running).
+	integer = func(r json.RawMessage) json.RawMessage {
+		var v int64
+		if bytes.Equal(bytes.TrimSpace(r), []byte("null")) || json.Unmarshal(r, &v) != nil {
 			return nil
 		}
 		return r
 	}
+	intOrNull = func(r json.RawMessage) json.RawMessage {
+		if bytes.Equal(bytes.TrimSpace(r), []byte("null")) {
+			return r
+		}
+		return integer(r)
+	}
 	codexUsage = func(r json.RawMessage) json.RawMessage {
-		return filter(r, tokenKeysCodex, subs{"input_tokens": num, "cached_input_tokens": num, "output_tokens": num, "reasoning_output_tokens": num})
+		return filter(r, tokenKeysCodex, subs{"input_tokens": integer, "cached_input_tokens": integer, "output_tokens": integer, "reasoning_output_tokens": integer})
 	}
 	tokenKeysCodex = []string{"input_tokens", "cached_input_tokens", "output_tokens", "reasoning_output_tokens"}
 	codexChanges   = each([]string{"path", "kind"}, subs{"path": str, "kind": str}, false)
@@ -47,7 +57,7 @@ func codexItem(r json.RawMessage) json.RawMessage {
 	case "command_execution":
 		add("command", str)
 		add("aggregated_output", str)
-		add("exit_code", num)
+		add("exit_code", intOrNull)
 		add("status", str)
 	case "file_change":
 		add("changes", codexChanges)
@@ -63,7 +73,23 @@ func codexItem(r json.RawMessage) json.RawMessage {
 	default:
 		return nil
 	}
-	return filter(r, keys, nested)
+	out := filter(r, keys, nested)
+	if h.Type == "command_execution" && out != nil {
+		out = hideSkillText(out)
+	}
+	return out
+}
+
+// hideSkillText replaces the output of a skill read: the text of a skill file
+// is somebody's content and is not published.
+func hideSkillText(item json.RawMessage) json.RawMessage {
+	var m obj
+	var cmd string
+	if json.Unmarshal(item, &m) != nil || json.Unmarshal(m["command"], &cmd) != nil || len(trace.SkillReads(cmd)) == 0 {
+		return item
+	}
+	m["aggregated_output"] = json.RawMessage(`"[текст навыка не сохраняется]"`)
+	return marshal(m)
 }
 
 var codexStarted = func(r json.RawMessage) json.RawMessage {

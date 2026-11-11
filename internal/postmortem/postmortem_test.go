@@ -304,7 +304,6 @@ func TestByRuleOnCodexRuns(t *testing.T) {
 	}
 	blocked := parse(`{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"ls","aggregated_output":"","exit_code":0,"status":"completed"}}` + "\n" +
 		`{"type":"item.completed","item":{"id":"b","type":"file_change","changes":[{"path":"/work/calc.go","kind":"update"}],"status":"failed"}}` + "\n")
-	blocked.Steps[1].Denied = true // the parser marks it only when the output says so
 	if pm, ok := ByRule(blocked); !ok || pm.FailedStep != 2 || !strings.Contains(pm.Cause, "Агенту запрещено менять файлы") {
 		t.Errorf("blocked edit: %+v, %v", pm, ok)
 	}
