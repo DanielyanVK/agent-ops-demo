@@ -9,7 +9,7 @@ Build once: `go build -o agentops ./cmd/agentops` (`go run` turns every non-zero
 3. `./agentops show <id> --json` - one run with its step list, no bulky text.
 4. `./agentops show <id> --step N --json` - one step with its `input` and `output`; only when the postmortem is not enough. A postmortem's `failed_step` N > 0 lets you skip call 3 and go straight here. Each text is capped at `--max-bytes K` (default 4000, `0` = no limit): longer text keeps its first and last K/2 bytes around a `… [обрезано N байт] …` line. It works for any run and any step number, not only failed ones. The reply is {"id", "step": {...}}. The marker line is added on top of the K bytes.
 
-`./agentops schema` prints the exact shape of every `--json` output as JSON Schema (about 14 KB): read it only to validate or generate code; the field list below is enough for reading results. Its `$defs` keys are `ls`, `show`, `show_step`, `why`, `check`, `run`, `analyze`, plus the shared `run_brief`, `step_brief`, `stats`, `postmortem`, `verdict`.
+`./agentops schema` prints the exact shape of every `--json` output as JSON Schema (about 17 KB): read it only to validate or generate code; the field list below is enough for reading results. Its `$defs` keys are `ls`, `show`, `show_step`, `why`, `check`, `run`, `analyze`, plus the shared `run_brief`, `step_brief`, `stats`, `postmortem`, `verdict`.
 
 Fields:
 
