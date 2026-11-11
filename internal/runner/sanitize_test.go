@@ -342,8 +342,15 @@ func TestLeakcheckExtraPatterns(t *testing.T) {
 	if code, out := run("no-such-name-[0-9]+"); code != 0 {
 		t.Errorf("a regex that matches nothing: %d %s", code, out)
 	}
-	if code, out := run("|"); code != 0 {
-		t.Errorf("empty alternatives must match nothing: %d %s", code, out)
+	for _, bad := range []string{"|", "acme|", "|acme", "a||b", "(", "[", "(a|)", "(|a)"} {
+		if code, out := run(bad); code != 2 || !strings.Contains(out, "AGENTOPS_LEAK_EXTRA: неверное регулярное выражение") || strings.Contains(out, "утечек не найдено") {
+			t.Errorf("%q: exit %d: %s", bad, code, out)
+		}
+	}
+	// A valid extra does not hide a secret.
+	os.WriteFile(filepath.Join(dir, "run-01", "meta.json"), []byte(`{"stderr":"key sk-abcdefghijklmnop1234"}`), 0o644)
+	if code, out := run("nothing-like-this"); code != 1 || !strings.Contains(out, "run-01/meta.json") {
+		t.Errorf("secret missed: %d %s", code, out)
 	}
 }
 

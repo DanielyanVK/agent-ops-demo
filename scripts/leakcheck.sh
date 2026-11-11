@@ -29,18 +29,33 @@ done
 # the checks above cannot know (a machine, an employer), also a regular
 # expression: AGENTOPS_LEAK_EXTRA="acme|corp-vpn[0-9]+". Matched in any case.
 re='sk-[A-Za-z0-9]{16,}|BEGIN [A-Z ]*PRIVATE KEY|Bearer [A-Za-z0-9._-]{16,}'
-if [[ "${AGENTOPS_LEAK_EXTRA:-}" =~ [^|] ]]; then
-  re="$re|(${AGENTOPS_LEAK_EXTRA})"
+if [ -n "${AGENTOPS_LEAK_EXTRA:-}" ]; then
+  extra=$AGENTOPS_LEAK_EXTRA
+  # An empty alternative matches everything; a broken expression would make grep fail.
+  rc=0
+  printf '' | grep -E -e "($extra)" >/dev/null 2>&1 || rc=$?
+  if [[ "$extra" == \|* || "$extra" == *\| || "$extra" == *\|\|* || "$extra" == *\(\|* || "$extra" == *\|\)* ]] || [ "$rc" -ge 2 ]; then
+    echo "AGENTOPS_LEAK_EXTRA: неверное регулярное выражение" >&2
+    exit 2
+  fi
+  re="$re|($extra)"
 fi
 
-# grep exits 1 when nothing matches; only 2 is an error.
-found() { grep -rilF "$@" -- "$dir" || [ $? -eq 1 ]; }
-foundre() { grep -rilE -e "$re" -- "$dir" || [ $? -eq 1 ]; }
-files=$({
-  foundre
-  if [ ${#words[@]} -gt 0 ]; then found -w "${words[@]}"; fi
-  found "${parts[@]}"
-} | sort -u)
+# grep exits 1 when nothing matches; 2 or more is an error and must not read as "clean".
+hits=$(mktemp)
+trap 'rm -f "$hits"' EXIT
+scan() {
+  local rc=0
+  grep -ril "$@" -- "$dir" >>"$hits" || rc=$?
+  if [ "$rc" -ge 2 ]; then
+    echo "ошибка grep (код $rc), проверка не выполнена" >&2
+    exit 2
+  fi
+}
+scan -E -e "$re"
+if [ ${#words[@]} -gt 0 ]; then scan -F -w "${words[@]}"; fi
+scan -F "${parts[@]}"
+files=$(sort -u "$hits")
 
 if [ -n "$files" ]; then
   echo "возможные утечки в файлах:"
