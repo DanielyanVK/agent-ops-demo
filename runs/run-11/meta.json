@@ -1,0 +1,13 @@
+{
+  "id": "run-11",
+  "task": "fix-tests",
+  "agent": "claude",
+  "model": "haiku",
+  "scenario": "skill",
+  "prompt": "The tests in this Go module fail. Find the bugs and fix them so that \"go test ./...\" passes. Do not modify the test files.",
+  "started_at": "2026-11-11T16:31:18Z",
+  "verdict": {
+    "passed": true,
+    "test_output": "PASS\nok  \ttestbed\t0.434s\n"
+  }
+}
