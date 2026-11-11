@@ -72,11 +72,7 @@ func runAnalyze(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			failed++
 			if *asJSON {
-				printJSON(stdout, struct {
-					ID    string `json:"id"`
-					OK    bool   `json:"ok"`
-					Error string `json:"error"`
-				}{r.ID, false, err.Error()})
+				printJSON(stdout, analyzeOutput{ID: r.ID, Error: err.Error()})
 			} else {
 				fmt.Fprintf(stdout, "%s  ошибка: %v\n", r.ID, err)
 			}
@@ -90,12 +86,7 @@ func runAnalyze(args []string, stdout, stderr io.Writer) error {
 		}
 		switch {
 		case *asJSON:
-			printJSON(stdout, struct {
-				ID      string  `json:"id"`
-				OK      bool    `json:"ok"`
-				Source  string  `json:"source"`
-				CostUSD float64 `json:"cost_usd"`
-			}{r.ID, true, pm.Source, pm.CostUSD})
+			printJSON(stdout, analyzeOutput{ID: r.ID, OK: true, Source: &pm.Source, CostUSD: &pm.CostUSD})
 		case pm.Source == "rule":
 			fmt.Fprintf(stdout, "%s  разбор готов · правило\n", r.ID)
 		default:

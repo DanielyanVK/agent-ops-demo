@@ -1,0 +1,536 @@
+{
+  "$defs": {
+    "analyze": {
+      "additionalProperties": false,
+      "properties": {
+        "cost_usd": {
+          "description": "Cost of the diagnosis, USD; only when ok is true",
+          "type": "number"
+        },
+        "error": {
+          "description": "Why the diagnosis failed; only when ok is false",
+          "type": "string"
+        },
+        "id": {
+          "description": "Run id",
+          "type": "string"
+        },
+        "ok": {
+          "description": "The diagnosis was made and saved",
+          "type": "boolean"
+        },
+        "source": {
+          "description": "Who made the diagnosis; only when ok is true",
+          "enum": [
+            "rule",
+            "model"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "ok"
+      ],
+      "type": "object"
+    },
+    "check": {
+      "additionalProperties": false,
+      "properties": {
+        "finished": {
+          "description": "Runs with a verdict (passed or failed)",
+          "type": "integer"
+        },
+        "min": {
+          "description": "Threshold in percent (--min)",
+          "type": "integer"
+        },
+        "ok": {
+          "description": "percent is at least min; false also makes the exit code 1",
+          "type": "boolean"
+        },
+        "passed": {
+          "description": "Runs whose original tests passed",
+          "type": "integer"
+        },
+        "percent": {
+          "description": "Passed share of finished runs, integer percent",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "finished",
+        "passed",
+        "percent",
+        "min",
+        "ok"
+      ],
+      "type": "object"
+    },
+    "ls": {
+      "additionalProperties": false,
+      "properties": {
+        "runs": {
+          "description": "Listed runs; only failed ones with --failed",
+          "items": {
+            "$ref": "#/$defs/run_brief"
+          },
+          "type": "array"
+        },
+        "stats": {
+          "$ref": "#/$defs/stats",
+          "description": "Summary over all runs, not only the listed ones"
+        }
+      },
+      "required": [
+        "stats",
+        "runs"
+      ],
+      "type": "object"
+    },
+    "postmortem": {
+      "additionalProperties": false,
+      "properties": {
+        "cause": {
+          "description": "Why the run failed",
+          "type": "string"
+        },
+        "cost_usd": {
+          "description": "Cost of the diagnosis, USD; 0 for rules",
+          "type": "number"
+        },
+        "failed_step": {
+          "description": "Step whose action caused the failure; 0 = not one step",
+          "type": "integer"
+        },
+        "fix": {
+          "description": "What to change so the run passes",
+          "type": "string"
+        },
+        "source": {
+          "description": "Who made the diagnosis",
+          "enum": [
+            "rule",
+            "model"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "failed_step",
+        "cause",
+        "fix",
+        "source",
+        "cost_usd"
+      ],
+      "type": "object"
+    },
+    "run": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Id of the recorded run",
+          "type": "string"
+        },
+        "model": {
+          "description": "Model the agent ran on",
+          "type": "string"
+        },
+        "scenario": {
+          "description": "Scenario the run was recorded with",
+          "type": "string"
+        },
+        "status": {
+          "description": "Verdict of the original tests",
+          "enum": [
+            "passed",
+            "failed",
+            "running"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "scenario",
+        "model"
+      ],
+      "type": "object"
+    },
+    "run_brief": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "description": "Agent that made the run",
+          "type": "string"
+        },
+        "cost_usd": {
+          "description": "What the agent run cost, USD",
+          "type": "number"
+        },
+        "duration_ms": {
+          "description": "Run duration in milliseconds",
+          "type": "integer"
+        },
+        "id": {
+          "description": "Run id, the directory name under runs/",
+          "type": "string"
+        },
+        "model": {
+          "description": "Model the agent ran on",
+          "type": "string"
+        },
+        "postmortem": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/postmortem"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Diagnosis of a failed run; null until analyze has run"
+        },
+        "scenario": {
+          "description": "Recording scenario, e.g. baseline or no-edit",
+          "type": "string"
+        },
+        "status": {
+          "description": "Verdict of the original tests, never the agent's own claim",
+          "enum": [
+            "passed",
+            "failed",
+            "running"
+          ],
+          "type": "string"
+        },
+        "steps": {
+          "description": "Number of tool calls in the run",
+          "type": "integer"
+        },
+        "stop_reason": {
+          "description": "How the agent stopped: success, error_max_turns, timeout, incomplete",
+          "type": "string"
+        },
+        "task": {
+          "description": "Name of the task the agent was given",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "task",
+        "agent",
+        "model",
+        "scenario",
+        "steps",
+        "duration_ms",
+        "cost_usd",
+        "stop_reason",
+        "postmortem"
+      ],
+      "type": "object"
+    },
+    "show": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "description": "Agent that made the run",
+          "type": "string"
+        },
+        "cost_usd": {
+          "description": "What the agent run cost, USD",
+          "type": "number"
+        },
+        "denials": {
+          "description": "Tools blocked by permissions, in order of first appearance",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "duration_ms": {
+          "description": "Run duration in milliseconds",
+          "type": "integer"
+        },
+        "id": {
+          "description": "Run id, the directory name under runs/",
+          "type": "string"
+        },
+        "model": {
+          "description": "Model the agent ran on",
+          "type": "string"
+        },
+        "postmortem": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/postmortem"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Diagnosis of a failed run; null until analyze has run"
+        },
+        "scenario": {
+          "description": "Recording scenario, e.g. baseline or no-edit",
+          "type": "string"
+        },
+        "status": {
+          "description": "Verdict of the original tests, never the agent's own claim",
+          "enum": [
+            "passed",
+            "failed",
+            "running"
+          ],
+          "type": "string"
+        },
+        "steps": {
+          "description": "Tool calls of the run, without their text",
+          "items": {
+            "$ref": "#/$defs/step_brief"
+          },
+          "type": "array"
+        },
+        "stop_reason": {
+          "description": "How the agent stopped: success, error_max_turns, timeout, incomplete",
+          "type": "string"
+        },
+        "task": {
+          "description": "Name of the task the agent was given",
+          "type": "string"
+        },
+        "verdict": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/verdict"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Result of the original tests; null while the run is going"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "task",
+        "agent",
+        "model",
+        "scenario",
+        "steps",
+        "duration_ms",
+        "cost_usd",
+        "stop_reason",
+        "postmortem",
+        "denials",
+        "verdict",
+        "steps"
+      ],
+      "type": "object"
+    },
+    "show_step": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Run id",
+          "type": "string"
+        },
+        "step": {
+          "additionalProperties": false,
+          "description": "The requested step with its text",
+          "properties": {
+            "denied": {
+              "description": "The call was blocked by permissions; not an error",
+              "type": "boolean"
+            },
+            "duration_ms": {
+              "description": "Step duration in milliseconds",
+              "type": "integer"
+            },
+            "error": {
+              "description": "The tool result was an error",
+              "type": "boolean"
+            },
+            "input": {
+              "description": "Tool input as indented JSON; cut to --max-bytes",
+              "type": "string"
+            },
+            "n": {
+              "description": "Step number, starting at 1",
+              "type": "integer"
+            },
+            "output": {
+              "description": "Tool result as text; cut to --max-bytes",
+              "type": "string"
+            },
+            "summary": {
+              "description": "One-line summary of the call",
+              "type": "string"
+            },
+            "tool": {
+              "description": "Tool the agent called: Read, Edit, Bash, ...",
+              "type": "string"
+            }
+          },
+          "required": [
+            "n",
+            "tool",
+            "summary",
+            "error",
+            "denied",
+            "duration_ms",
+            "input",
+            "output"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "step"
+      ],
+      "type": "object"
+    },
+    "stats": {
+      "additionalProperties": false,
+      "properties": {
+        "avg_duration_ms": {
+          "description": "Average run duration in milliseconds",
+          "type": "integer"
+        },
+        "cost_usd": {
+          "description": "Total cost of the agent runs, USD",
+          "type": "number"
+        },
+        "failed": {
+          "description": "Runs whose original tests failed",
+          "type": "integer"
+        },
+        "passed": {
+          "description": "Runs whose original tests passed",
+          "type": "integer"
+        },
+        "postmortem_cost_usd": {
+          "description": "Total cost of model diagnoses, USD",
+          "type": "number"
+        },
+        "running": {
+          "description": "Runs without a verdict yet",
+          "type": "integer"
+        },
+        "total": {
+          "description": "Number of runs",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total",
+        "passed",
+        "failed",
+        "running",
+        "cost_usd",
+        "postmortem_cost_usd",
+        "avg_duration_ms"
+      ],
+      "type": "object"
+    },
+    "step_brief": {
+      "additionalProperties": false,
+      "properties": {
+        "denied": {
+          "description": "The call was blocked by permissions; not an error",
+          "type": "boolean"
+        },
+        "duration_ms": {
+          "description": "Step duration in milliseconds",
+          "type": "integer"
+        },
+        "error": {
+          "description": "The tool result was an error",
+          "type": "boolean"
+        },
+        "n": {
+          "description": "Step number, starting at 1",
+          "type": "integer"
+        },
+        "summary": {
+          "description": "One-line summary of the call",
+          "type": "string"
+        },
+        "tool": {
+          "description": "Tool the agent called: Read, Edit, Bash, ...",
+          "type": "string"
+        }
+      },
+      "required": [
+        "n",
+        "tool",
+        "summary",
+        "error",
+        "denied",
+        "duration_ms"
+      ],
+      "type": "object"
+    },
+    "verdict": {
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "description": "The original tests passed",
+          "type": "boolean"
+        },
+        "test_output": {
+          "description": "Last 2000 bytes of the test run output",
+          "type": "string"
+        }
+      },
+      "required": [
+        "passed",
+        "test_output"
+      ],
+      "type": "object"
+    },
+    "why": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Run id",
+          "type": "string"
+        },
+        "postmortem": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/postmortem"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Diagnosis of a failed run; null until analyze has run"
+        },
+        "status": {
+          "description": "Verdict of the original tests",
+          "enum": [
+            "passed",
+            "failed",
+            "running"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "postmortem"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "agentops-output-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agentops --json output"
+}

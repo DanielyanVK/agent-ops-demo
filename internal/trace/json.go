@@ -1,36 +1,36 @@
 package trace
 
 type RunBrief struct {
-	ID         string      `json:"id"`
-	Status     string      `json:"status"`
-	Task       string      `json:"task"`
-	Agent      string      `json:"agent"`
-	Model      string      `json:"model"`
-	Scenario   string      `json:"scenario"`
-	Steps      int         `json:"steps"`
-	DurationMS int64       `json:"duration_ms"`
-	CostUSD    float64     `json:"cost_usd"`
-	StopReason string      `json:"stop_reason"`
-	Postmortem *Postmortem `json:"postmortem"` // null when there is none
+	ID         string      `json:"id" doc:"Run id, the directory name under runs/"`
+	Status     string      `json:"status" doc:"Verdict of the original tests, never the agent's own claim" enum:"passed,failed,running"`
+	Task       string      `json:"task" doc:"Name of the task the agent was given"`
+	Agent      string      `json:"agent" doc:"Agent that made the run"`
+	Model      string      `json:"model" doc:"Model the agent ran on"`
+	Scenario   string      `json:"scenario" doc:"Recording scenario, e.g. baseline or no-edit"`
+	Steps      int         `json:"steps" doc:"Number of tool calls in the run"`
+	DurationMS int64       `json:"duration_ms" doc:"Run duration in milliseconds"`
+	CostUSD    float64     `json:"cost_usd" doc:"What the agent run cost, USD"`
+	StopReason string      `json:"stop_reason" doc:"How the agent stopped: success, error_max_turns, timeout, incomplete"`
+	Postmortem *Postmortem `json:"postmortem" doc:"Diagnosis of a failed run; null until analyze has run"` // null when there is none
 }
 
 type StepBrief struct {
-	N          int    `json:"n"`
-	Tool       string `json:"tool"`
-	Summary    string `json:"summary"`
-	Error      bool   `json:"error"`
-	Denied     bool   `json:"denied"`
-	DurationMS int64  `json:"duration_ms"`
+	N          int    `json:"n" doc:"Step number, starting at 1"`
+	Tool       string `json:"tool" doc:"Tool the agent called: Read, Edit, Bash, ..."`
+	Summary    string `json:"summary" doc:"One-line summary of the call"`
+	Error      bool   `json:"error" doc:"The tool result was an error"`
+	Denied     bool   `json:"denied" doc:"The call was blocked by permissions; not an error"`
+	DurationMS int64  `json:"duration_ms" doc:"Step duration in milliseconds"`
 }
 
 type StatsJSON struct {
-	Total             int     `json:"total"`
-	Passed            int     `json:"passed"`
-	Failed            int     `json:"failed"`
-	Running           int     `json:"running"`
-	CostUSD           float64 `json:"cost_usd"`
-	PostmortemCostUSD float64 `json:"postmortem_cost_usd"`
-	AvgDurationMS     int64   `json:"avg_duration_ms"`
+	Total             int     `json:"total" doc:"Number of runs"`
+	Passed            int     `json:"passed" doc:"Runs whose original tests passed"`
+	Failed            int     `json:"failed" doc:"Runs whose original tests failed"`
+	Running           int     `json:"running" doc:"Runs without a verdict yet"`
+	CostUSD           float64 `json:"cost_usd" doc:"Total cost of the agent runs, USD"`
+	PostmortemCostUSD float64 `json:"postmortem_cost_usd" doc:"Total cost of model diagnoses, USD"`
+	AvgDurationMS     int64   `json:"avg_duration_ms" doc:"Average run duration in milliseconds"`
 }
 
 func (s Status) String() string {

@@ -42,12 +42,6 @@ func statusWord(s trace.Status) string {
 	return "идёт"
 }
 
-type stepDetail struct {
-	trace.StepBrief
-	Input  string `json:"input"`
-	Output string `json:"output"`
-}
-
 func runShow(args []string, stdout io.Writer) error {
 	flags := flag.NewFlagSet("show", flag.ContinueOnError)
 	runsDir := runsFlag(flags)
@@ -71,10 +65,7 @@ func runShow(args []string, stdout io.Writer) error {
 		}
 		s := run.Steps[*step-1]
 		if *asJSON {
-			return printJSON(stdout, struct {
-				ID   string     `json:"id"`
-				Step stepDetail `json:"step"`
-			}{run.ID, stepDetail{s.Brief(), s.Input, s.Output}})
+			return printJSON(stdout, showStepOutput{run.ID, stepDetail{s.Brief(), s.Input, s.Output}})
 		}
 		title := fmt.Sprintf("Шаг %d · %s", s.N, s.Tool)
 		if s.IsError {
@@ -94,12 +85,7 @@ func runShow(args []string, stdout io.Writer) error {
 		if denials == nil {
 			denials = []string{}
 		}
-		return printJSON(stdout, struct {
-			trace.RunBrief
-			Denials []string          `json:"denials"`
-			Verdict *trace.Verdict    `json:"verdict"`
-			Steps   []trace.StepBrief `json:"steps"`
-		}{run.Brief(), denials, run.Verdict, steps})
+		return printJSON(stdout, showOutput{run.Brief(), denials, run.Verdict, steps})
 	}
 
 	info := []string{

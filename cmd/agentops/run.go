@@ -63,12 +63,7 @@ func runRun(args []string, stdout io.Writer) error {
 			return err
 		}
 		if *asJSON {
-			err = printJSON(stdout, struct {
-				ID       string `json:"id"`
-				Status   string `json:"status"`
-				Scenario string `json:"scenario"`
-				Model    string `json:"model"`
-			}{id, r.Status().String(), sc.Name, *model})
+			err = printJSON(stdout, runOutput{id, r.Status().String(), sc.Name, *model})
 		} else {
 			_, err = fmt.Fprintf(stdout, "%s  %s  %s  %s\n", id, r.Status().Glyph(), sc.Name, *model)
 		}

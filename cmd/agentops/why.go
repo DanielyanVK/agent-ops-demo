@@ -35,11 +35,7 @@ func runWhy(args []string, stdout io.Writer) error {
 	}
 
 	if *asJSON {
-		return printJSON(stdout, struct {
-			ID         string            `json:"id"`
-			Status     string            `json:"status"`
-			Postmortem *trace.Postmortem `json:"postmortem"`
-		}{run.ID, run.Status().String(), run.Postmortem})
+		return printJSON(stdout, whyOutput{run.ID, run.Status().String(), run.Postmortem})
 	}
 
 	// The step and the model's text come from the agent's run: cleaned like show --step.

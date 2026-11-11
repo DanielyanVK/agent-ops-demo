@@ -17,14 +17,6 @@ func init() {
 	})
 }
 
-type checkResult struct {
-	Finished int  `json:"finished"`
-	Passed   int  `json:"passed"`
-	Percent  int  `json:"percent"`
-	Min      int  `json:"min"`
-	OK       bool `json:"ok"`
-}
-
 func runCheck(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("check", flag.ContinueOnError)
 	runsDir := runsFlag(flags)

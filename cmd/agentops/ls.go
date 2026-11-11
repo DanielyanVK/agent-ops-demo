@@ -56,10 +56,7 @@ func runLs(args []string, stdout, stderr io.Writer) error {
 		for _, r := range shown {
 			briefs = append(briefs, r.Brief())
 		}
-		return printJSON(stdout, struct {
-			Stats trace.StatsJSON  `json:"stats"`
-			Runs  []trace.RunBrief `json:"runs"`
-		}{stats.JSON(), briefs})
+		return printJSON(stdout, lsOutput{stats.JSON(), briefs})
 	}
 
 	if stats.Total == 0 {

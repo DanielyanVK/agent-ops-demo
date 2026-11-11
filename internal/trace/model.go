@@ -38,16 +38,16 @@ type Step struct {
 }
 
 type Verdict struct {
-	Passed     bool   `json:"passed"`
-	TestOutput string `json:"test_output"`
+	Passed     bool   `json:"passed" doc:"The original tests passed"`
+	TestOutput string `json:"test_output" doc:"Last 2000 bytes of the test run output"`
 }
 
 type Postmortem struct {
-	FailedStep int     `json:"failed_step"`
-	Cause      string  `json:"cause"`
-	Fix        string  `json:"fix"`
-	Source     string  `json:"source"`   // "rule" or "model"
-	CostUSD    float64 `json:"cost_usd"` // 0 for rules
+	FailedStep int     `json:"failed_step" doc:"Step whose action caused the failure; 0 = not one step"`
+	Cause      string  `json:"cause" doc:"Why the run failed"`
+	Fix        string  `json:"fix" doc:"What to change so the run passes"`
+	Source     string  `json:"source" doc:"Who made the diagnosis" enum:"rule,model"`
+	CostUSD    float64 `json:"cost_usd" doc:"Cost of the diagnosis, USD; 0 for rules"`
 }
 
 type Status int
