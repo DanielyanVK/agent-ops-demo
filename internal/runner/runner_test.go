@@ -9,6 +9,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -79,6 +80,10 @@ func setup(t *testing.T, mode string) env {
 	patch(t, filepath.Join(fixed, "text.go"), "s[:n-1] + ", "string([]rune(s)[:n-1]) + ")
 
 	t.Setenv("AGENTOPS_CLAUDE_BIN", bin)
+	// The fake agents are steered through the environment, which agents otherwise do not inherit.
+	old := agentEnvAllow
+	agentEnvAllow = append(slices.Clone(old), "MODE", "FIXED", "ARGS_OUT", "FULLNAME", "PIDS", "DROP", "SNAP")
+	t.Cleanup(func() { agentEnvAllow = old })
 	// A fake HOME would otherwise give every go test a cold build cache.
 	cache, err := exec.Command("go", "env", "GOCACHE").Output()
 	if err != nil {

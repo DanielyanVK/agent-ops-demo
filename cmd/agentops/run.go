@@ -30,7 +30,7 @@ func runRun(args []string, stdout io.Writer) error {
 	scenarioName := fs.String("scenario", "baseline", "сценарий: "+runner.ScenarioNames())
 	agent := fs.String("agent", "claude", "агент: claude, codex")
 	model := fs.String("model", "", "модель агента (claude: haiku; codex: по умолчанию свой)")
-	plugin := fs.String("plugin", "plugin", "каталог плагина с навыком для сценария skill (claude)")
+	plugin := fs.String("plugin", "plugin", "каталог плагина с навыком для сценария skill")
 	n := fs.Int("n", 1, "сколько прогонов выполнить")
 	asJSON := jsonFlag(fs)
 	rest, err := parseFlags(fs, args, stdout)

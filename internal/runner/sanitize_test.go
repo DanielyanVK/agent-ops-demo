@@ -343,3 +343,30 @@ func TestLeakcheckExtraPatterns(t *testing.T) {
 		t.Errorf("empty alternatives must match nothing: %d %s", code, out)
 	}
 }
+
+func TestScrubRedactsCredentials(t *testing.T) {
+	in := "key sk-proj-abcDEF123_xyz and sk-*****abcd org-AbCdEfGh1234 req_AbCdEfGh1234 Authorization: Bearer abc.DEF-123_xyz short sk-1 req_12"
+	got := string(scrub([]byte(in), Scrub{}))
+	want := "key sk-… and sk-… org-… req_… Authorization: Bearer … short sk-1 req_12"
+	if got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+}
+
+func TestScrubMapsCodexHome(t *testing.T) {
+	s := Scrub{Home: "/Users/tester", CodexHome: "/Volumes/data/codex-profile"}
+	if got := string(scrub([]byte("read /Volumes/data/codex-profile/auth.json"), s)); got != "read ~/.codex/auth.json" {
+		t.Errorf("outside home: %q", got)
+	}
+	s.CodexHome = "/Users/tester/.codex"
+	if got := string(scrub([]byte("read /Users/tester/.codex/auth.json"), s)); got != "read ~/.codex/auth.json" {
+		t.Errorf("inside home: %q", got)
+	}
+}
+
+func TestSanitizeCodexFailedTurnRedactsAPIKeyError(t *testing.T) {
+	got := sanitizeCodex(`{"type":"turn.failed","error":{"message":"Incorrect API key provided: sk-proj-abcdefgh12345678 (org-ABCDEFGH1234)"}}`)
+	if strings.Contains(got, "abcdefgh") || strings.Contains(got, "ABCDEFGH") || !strings.Contains(got, "sk-…") {
+		t.Errorf("%s", got)
+	}
+}

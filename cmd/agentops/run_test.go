@@ -134,3 +134,10 @@ func TestRunSkillScenarioNeedsPlugin(t *testing.T) {
 		t.Error("runs directory created")
 	}
 }
+
+func TestRunCodexSkillScenarioNeedsPlugin(t *testing.T) {
+	err := runRun([]string{"--runs", filepath.Join(t.TempDir(), "runs"), "--testbed", "../../testbed", "--agent", "codex", "--scenario", "skill", "--plugin", "nope"}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "каталог плагина не найден") {
+		t.Fatalf("got %v", err)
+	}
+}

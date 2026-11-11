@@ -62,7 +62,7 @@ func Run(ctx context.Context, o Options) (id string, err error) {
 	if err != nil {
 		return "", err
 	}
-	if o.Agent == "claude" && o.Scenario.Skills {
+	if o.Scenario.Skills {
 		if o.PluginDir, err = filepath.Abs(o.PluginDir); err != nil {
 			return "", err
 		}
@@ -80,6 +80,11 @@ func Run(ctx context.Context, o Options) (id string, err error) {
 	defer os.RemoveAll(workdir)
 	if err := copyTree(o.TestbedDir, workdir); err != nil {
 		return "", err
+	}
+	if o.Agent == "codex" && o.Scenario.Skills {
+		if err := installSkills(o.PluginDir, workdir); err != nil {
+			return "", err
+		}
 	}
 
 	if err := os.MkdirAll(o.RunsDir, 0o755); err != nil {
@@ -102,7 +107,7 @@ func Run(ctx context.Context, o Options) (id string, err error) {
 	}
 
 	home, _ := os.UserHomeDir()
-	s := Scrub{Workdir: workdir, TempDir: filepath.Clean(os.TempDir()), Home: home, PluginDir: o.PluginDir}
+	s := Scrub{Workdir: workdir, TempDir: filepath.Clean(os.TempDir()), Home: home, PluginDir: o.PluginDir, CodexHome: os.Getenv("CODEX_HOME")}
 	if u, err := user.Current(); err == nil {
 		s.User, s.FullName = u.Username, u.Name
 	}
@@ -191,7 +196,7 @@ func runAgent(ctx context.Context, ag agent, o Options, s Scrub, tracePath strin
 	defer cancel()
 	cmd := exec.CommandContext(actx, bin, args...)
 	cmd.Dir = s.Workdir
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = agentEnv(env)
 	// Its own process group: Ctrl-C reaches agentops only, and a cancel kills the
 	// agent together with the tools it started.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

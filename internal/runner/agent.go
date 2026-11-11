@@ -61,8 +61,10 @@ var codexIsolation = []string{"apps", "plugins", "remote_plugin", "plugin_sharin
 	"skill_mcp_dependency_install", "multi_agent", "browser_use", "browser_use_external", "computer_use",
 	"image_generation", "goals", "tool_suggest"}
 
-// codexSkillFeatures stay enabled when the scenario is about skills, so the skills installed in the user's profile are available.
-var codexSkillFeatures = []string{"plugins", "remote_plugin", "plugin_sharing", "skill_search", "skill_mcp_dependency_install"}
+// codexSkillFeatures stay enabled when the scenario is about skills. Plugins do
+// not: with them on, the agent reads whatever third-party skills the profile has;
+// the demo skill is placed in the project instead (see installSkills).
+var codexSkillFeatures = []string{"skill_search", "skill_mcp_dependency_install"}
 
 func codexPrepare(o Options, workdir string) ([]string, []string, error) {
 	// Inside the sandbox Go's default build cache is not writable and every `go test` would fail.
@@ -99,4 +101,38 @@ func checkAgent(o Options) (agent, error) {
 		return a, fmt.Errorf("сценарий %s не поддерживается агентом codex", o.Scenario.Name)
 	}
 	return a, nil
+}
+
+// agentEnvAllow is the whole environment an agent gets: it inherits nothing
+// else from agentops, so a variable of the parent shell cannot reach the trace.
+var agentEnvAllow = []string{"PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "TERM",
+	"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_HOME"}
+
+// agentEnv is the allow-listed part of the current environment plus extra.
+func agentEnv(extra []string) []string {
+	var env []string
+	for _, k := range agentEnvAllow {
+		if v, ok := os.LookupEnv(k); ok {
+			env = append(env, k+"="+v)
+		}
+	}
+	return append(env, extra...)
+}
+
+// installSkills puts the skills of the plugin where Codex looks for project skills.
+func installSkills(pluginDir, workdir string) error {
+	entries, err := os.ReadDir(filepath.Join(pluginDir, "skills"))
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		dst := filepath.Join(workdir, ".agents", "skills", e.Name())
+		if err := copyTree(filepath.Join(pluginDir, "skills", e.Name()), dst); err != nil {
+			return err
+		}
+	}
+	return nil
 }

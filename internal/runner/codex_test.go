@@ -122,14 +122,26 @@ const fakeCodex = `#!/bin/bash
 case "$MODE" in
   fix) cp "$FIXED"/*.go . ;;
 esac
+if [ "$MODE" = fixagents ]; then
+  cp "$FIXED"/*.go .
+  mkdir -p .agents
+  printf 'package shop\nimport "testing"\nfunc TestZ(t *testing.T) { t.Fatal("x") }\n' > .agents/zz_test.go
+fi
 echo "$@" > "$ARGS_OUT"
+[ -f .agents/skills/go-test-fixer/SKILL.md ] && echo SKILL_INSTALLED >> "$ARGS_OUT"
 echo "GOCACHE=$GOCACHE" >> "$ARGS_OUT"
 echo "TZ=$TZ" >> "$ARGS_OUT"
 printf '{"type":"thread.started","thread_id":"t-secret"}\n'
 printf '{"type":"turn.started"}\n'
+printf '{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"cat %s/calc.go","aggregated_output":"","exit_code":null,"status":"in_progress"}}\n' "$PWD"
 printf '{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"cat %s/calc.go","aggregated_output":"home %s","exit_code":0,"status":"completed"}}\n' "$PWD" "$HOME"
 printf '{"type":"item.completed","item":{"id":"item_2","type":"todo_list","items":[{"text":"secret-plan"}]}}\n'
-printf '{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":5,"output_tokens":3,"reasoning_output_tokens":1}}\n'
+case "$MODE" in
+  failed) printf '{"type":"turn.failed","error":{"message":"401 Incorrect API key provided: sk-proj-abcdefgh12345678. Request req_abcdefgh1234"}}\n' ;;
+  *) printf '{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":5,"output_tokens":3,"reasoning_output_tokens":1}}\n' ;;
+esac
+echo "warning from $PWD" >&2
+[ "$MODE" = crash ] && exit 3
 exit 0
 `
 
@@ -170,7 +182,7 @@ func TestCodexRunEndToEnd(t *testing.T) {
 
 	tr, _ := os.ReadFile(filepath.Join(e.runs, id, "trace.jsonl"))
 	lines := strings.Split(strings.TrimSpace(string(tr)), "\n")
-	if len(lines) != 4 { // thread.started, turn.started, command, turn.completed; the todo_list is dropped
+	if len(lines) != 5 { // thread.started, turn.started, command started and completed, turn.completed; the todo_list is dropped
 		t.Fatalf("%d lines:\n%s", len(lines), tr)
 	}
 	ts := regexp.MustCompile(`"ts":"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z"`)
@@ -315,25 +327,41 @@ func TestSkillScenarioNeedsThePluginDirectory(t *testing.T) {
 	}
 }
 
-func TestCodexSkillScenarioKeepsTheProfileSkills(t *testing.T) {
-	e := setupCodex(t, "none")
-	if _, err := skillRun(t, e, "codex", ""); err != nil {
+func TestCodexSkillScenarioInstallsTheDemoSkill(t *testing.T) {
+	e := setupCodex(t, "fixagents")
+	id, err := skillRun(t, e, "codex", "../../plugin")
+	if err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(e.args)
 	got := string(b)
-	if !strings.Contains(got, "-s workspace-write ") {
-		t.Errorf("sandbox: %s", got)
+	if !strings.Contains(got, "-s workspace-write ") || !strings.Contains(got, "\nSKILL_INSTALLED\n") {
+		t.Errorf("sandbox or installed skill: %s", got)
 	}
-	for _, gone := range []string{"plugins", "remote_plugin", "plugin_sharing", "skill_search", "skill_mcp_dependency_install"} {
-		if strings.Contains(got, "--disable "+gone+" ") {
-			t.Errorf("--disable %s must be lifted: %s", gone, got)
+	for _, lifted := range []string{"skill_search", "skill_mcp_dependency_install"} {
+		if strings.Contains(got, "--disable "+lifted+" ") {
+			t.Errorf("--disable %s must be lifted: %s", lifted, got)
 		}
 	}
-	for _, kept := range []string{"apps", "hooks", "memories", "multi_agent", "browser_use", "computer_use", "goals", "tool_suggest"} {
+	for _, kept := range []string{"plugins", "remote_plugin", "plugin_sharing", "apps", "hooks", "memories", "multi_agent", "browser_use", "computer_use", "goals", "tool_suggest"} {
 		if !strings.Contains(got, "--disable "+kept+" ") {
 			t.Errorf("--disable %s must stay: %s", kept, got)
 		}
+	}
+	// Files the agent adds under .agents (even a failing test) cannot change the verdict.
+	if v := load(t, e, id).Verdict; v == nil || !v.Passed {
+		t.Errorf("verdict: %+v", v)
+	}
+}
+
+func TestCodexSkillScenarioNeedsThePluginDirectory(t *testing.T) {
+	e := setupCodex(t, "none")
+	_, err := skillRun(t, e, "codex", filepath.Join(t.TempDir(), "missing"))
+	if err == nil || !strings.Contains(err.Error(), "каталог плагина не найден") {
+		t.Fatalf("err %v", err)
+	}
+	if _, serr := os.Stat(e.args); serr == nil {
+		t.Error("the agent must not start")
 	}
 }
 
@@ -389,5 +417,119 @@ func TestSanitizeCodexNumberShapes(t *testing.T) {
 	}
 	if got := sanitizeCodex(`{"type":"turn.completed","usage":{"input_tokens":1.5,"output_tokens":null,"reasoning_output_tokens":3}}`); strings.Contains(got, "1.5") || strings.Contains(got, "null") || !strings.Contains(got, `"reasoning_output_tokens":3`) {
 		t.Errorf("token shapes: %s", got)
+	}
+}
+
+func TestCodexRunWithAPairOfItemEventsIsParsed(t *testing.T) {
+	e := setupCodex(t, "fix")
+	id, err := doCodexRun(t, e, "baseline", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := load(t, e, id)
+	if len(r.Steps) != 1 || r.Steps[0].Line != "cat /work/calc.go" || r.Steps[0].Duration < 0 || r.StopReason != "success" || r.TokensIn != 10 || r.Turns != 1 {
+		t.Errorf("%+v", r)
+	}
+	if r.Stderr != "" || r.Status().String() != "passed" {
+		t.Errorf("stderr %q status %v", r.Stderr, r.Status())
+	}
+}
+
+func TestCodexNonZeroExitKeepsScrubbedStderr(t *testing.T) {
+	e := setupCodex(t, "crash")
+	id, err := doCodexRun(t, e, "baseline", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := load(t, e, id)
+	if !strings.Contains(r.Stderr, "warning from /work") || strings.Contains(r.Stderr, "agentops-work") {
+		t.Errorf("stderr %q", r.Stderr)
+	}
+	if r.Status().String() != "failed" {
+		t.Error("a run without a fix fails")
+	}
+}
+
+func TestCodexFailedTurnIsRecordedAndRedacted(t *testing.T) {
+	e := setupCodex(t, "failed")
+	id, err := doCodexRun(t, e, "baseline", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, _ := os.ReadFile(filepath.Join(e.runs, id, "trace.jsonl"))
+	if strings.Contains(string(tr), "abcdefgh") || !strings.Contains(string(tr), "sk-…") || !strings.Contains(string(tr), "req_…") {
+		t.Errorf("key not redacted:\n%s", tr)
+	}
+	r := load(t, e, id)
+	if r.StopReason != "error_during_execution" || !r.ResultError || !strings.HasPrefix(r.Result, "401 Incorrect API key") {
+		t.Errorf("%+v", r)
+	}
+}
+
+func TestAgentsDoNotInheritTheEnvironment(t *testing.T) {
+	t.Setenv("AGENTOPS_TEST_SECRET", "hunter2-parent-shell")
+	t.Setenv("ANTHROPIC_API_KEY", "kept-for-the-agent")
+	e := setupCodex(t, "none")
+	dir := t.TempDir()
+	claude := filepath.Join(dir, "claude")
+	codex := filepath.Join(dir, "codex")
+	os.WriteFile(claude, []byte(`#!/bin/bash
+printf '{"type":"result","subtype":"success","is_error":false,"result":"secret=[%s] key=[%s] tz=[%s]"}\n' "$AGENTOPS_TEST_SECRET" "$ANTHROPIC_API_KEY" "$TZ"
+`), 0o755)
+	os.WriteFile(codex, []byte(`#!/bin/bash
+printf '{"type":"item.completed","item":{"id":"i","type":"command_execution","command":"env","aggregated_output":"secret=[%s] gocache=[%s]","exit_code":0,"status":"completed"}}\n' "$AGENTOPS_TEST_SECRET" "${GOCACHE:+set}"
+`), 0o755)
+	t.Setenv("AGENTOPS_CLAUDE_BIN", claude)
+	t.Setenv("AGENTOPS_CODEX_BIN", codex)
+	for _, agent := range []string{"claude", "codex"} {
+		sc, _ := FindScenario("baseline")
+		id, err := Run(context.Background(), Options{RunsDir: e.runs, TestbedDir: testbedDir, Agent: agent, Model: "x", Scenario: sc})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tr, _ := os.ReadFile(filepath.Join(e.runs, id, "trace.jsonl"))
+		got := string(tr)
+		if strings.Contains(got, "hunter2") || !strings.Contains(got, "secret=[]") {
+			t.Errorf("%s inherited the parent environment:\n%s", agent, got)
+		}
+		if agent == "claude" && (!strings.Contains(got, "key=[kept-for-the-agent]") || !strings.Contains(got, "tz=[UTC]")) {
+			t.Errorf("allow-listed variables lost:\n%s", got)
+		}
+		if agent == "codex" && !strings.Contains(got, "gocache=[set]") {
+			t.Errorf("codex lost GOCACHE:\n%s", got)
+		}
+	}
+}
+
+func TestAgentEnvIsTheAllowList(t *testing.T) {
+	t.Setenv("AGENTOPS_TEST_SECRET", "x")
+	t.Setenv("CODEX_HOME", "/h/.codex")
+	t.Setenv("LC_CTYPE", "")
+	env := strings.Join(agentEnv([]string{"TZ=UTC"}), "\n")
+	for _, want := range []string{"PATH=", "CODEX_HOME=/h/.codex", "LC_CTYPE=", "TZ=UTC"} {
+		if !strings.Contains(env, want) {
+			t.Errorf("env lacks %q:\n%s", want, env)
+		}
+	}
+	if strings.Contains(env, "AGENTOPS_TEST_SECRET") {
+		t.Errorf("env leaks:\n%s", env)
+	}
+}
+
+func TestCodexTimeoutLineIsParsed(t *testing.T) {
+	// the runner-written line, read back by the parser
+	e := setupCodex(t, "none")
+	bin := filepath.Join(t.TempDir(), "slow-codex")
+	os.WriteFile(bin, []byte("#!/bin/bash\nsleep 30\n"), 0o755)
+	t.Setenv("AGENTOPS_CODEX_BIN", bin)
+	old := agentTimeout
+	agentTimeout = 300 * time.Millisecond
+	defer func() { agentTimeout = old }()
+	id, err := doCodexRun(t, e, "baseline", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := load(t, e, id); r.StopReason != "timeout" || !r.ResultError {
+		t.Errorf("%+v", r)
 	}
 }

@@ -33,7 +33,7 @@ var (
 // Scrub names what must not leave the machine: tool output can carry the
 // workdir, the temp directory (go build paths), the home directory, the login
 // and full name (an `ls -la` owner column, a git author) and the host name.
-type Scrub struct{ Workdir, TempDir, Home, User, FullName, Host, PluginDir string }
+type Scrub struct{ Workdir, TempDir, Home, User, FullName, Host, PluginDir, CodexHome string }
 
 // Sanitize returns nil when the line must not be published.
 func Sanitize(line []byte, s Scrub) []byte {
@@ -63,7 +63,13 @@ func scrub(b []byte, s Scrub) []byte {
 	replacePath(s.PluginDir, "/plugin") // a skill's output names its directory, inside the checkout
 	b = scratchRe.ReplaceAll(b, []byte("/scratch$1"))
 	replacePath(s.TempDir, "/tmp")
+	if s.CodexHome != "" && (s.Home == "" || !strings.HasPrefix(s.CodexHome, s.Home)) {
+		replacePath(s.CodexHome, "~/.codex")
+	}
 	replace(s.Home, "~")
+	for _, r := range secretRes {
+		b = r.re.ReplaceAll(b, []byte(r.to))
+	}
 	short, _, _ := strings.Cut(s.Host, ".")
 	names := [][2]string{{s.Host, "host"}, {short, "host"}, {s.FullName, "user"}, {s.User, "user"}}
 	// Longest first: a full name may contain the login.
@@ -74,6 +80,17 @@ func scrub(b []byte, s Scrub) []byte {
 		}
 	}
 	return b
+}
+
+// secretRes redact credentials that a tool output or an error message may echo.
+var secretRes = []struct {
+	re *regexp.Regexp
+	to string
+}{
+	{regexp.MustCompile(`sk-[A-Za-z0-9_*-]{8,}`), "sk-…"},
+	{regexp.MustCompile(`org-[A-Za-z0-9]{8,}`), "org-…"},
+	{regexp.MustCompile(`req_[A-Za-z0-9]{8,}`), "req_…"},
+	{regexp.MustCompile(`Bearer [A-Za-z0-9._-]{8,}`), "Bearer …"},
 }
 
 // pathEnd are the characters that end a path in a serialized line or a shell
