@@ -41,7 +41,7 @@ docker run --rm agentops ls           # таблица прогонов
 $ go run ./cmd/agentops why run-02 --runs internal/trace/testdata/runs
 run-02 · ✗ провал
 
-Сломалось на шаге 3: Edit stats.go
+Причина на шаге 3: Edit stats.go
 Причина: Агенту запрещено менять файлы (заблокировано: Edit), исправления не применены
 Что поправить: Разрешить агенту Edit для этой задачи или убрать из неё правку файлов
 ```

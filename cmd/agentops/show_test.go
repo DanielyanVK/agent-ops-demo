@@ -36,7 +36,7 @@ func TestShowHuman(t *testing.T) {
 	if !strings.HasPrefix(got, "run-02 · fix-tests · claude · haiku · no-edit · ✗ провал\n") {
 		t.Errorf("header: %q", got)
 	}
-	for _, want := range []string{"остановка: ", "заблокировано: Edit", "\n1 ✓ Read", "\n3 ✗ Edit stats.go", "0.2с · запрещено\n4 ✓"} {
+	for _, want := range []string{"остановка: ", "заблокировано: Edit", "\n1 ✓ Read", "\n3 ⊘ Edit stats.go", "0.2с · запрещено ← разбор\n4 ✓"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}

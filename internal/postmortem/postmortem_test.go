@@ -142,7 +142,7 @@ func TestBuildPrompt(t *testing.T) {
 	r.Stderr = "STDERR-TEXT"
 	p := BuildPrompt(r)
 	for _, want := range []string{"Задание агенту: PROMPT-TEXT\n", "STDERR-TEXT", "1. [✓] Read stats.go", "2. [✗] Bash go test",
-		"OUT-BASH-ERR", "OUT-4", "OUT-5", "OUT-6", "Готово.", "--- FAIL: TestMean", "failed_step"} {
+		"OUT-BASH-ERR", "OUT-4", "OUT-5", "OUT-6", "Готово.", "--- FAIL: TestMean", "failed_step", "собственное действие", "0, если причина в формулировке задания, правах или лимитах"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt lacks %q", want)
 		}

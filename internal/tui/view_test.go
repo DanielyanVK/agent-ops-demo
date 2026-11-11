@@ -6,6 +6,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"agentops/internal/trace"
 )
 
 func TestViewShowsSummaryRunsStepsAndPostmortem(t *testing.T) {
@@ -27,7 +29,7 @@ func TestViewShowsSummaryRunsStepsAndPostmortem(t *testing.T) {
 
 	m = press(m, "j")
 	out = plain(m)
-	for _, want := range []string{"run-02 · ✗ провал · haiku · no-edit · fix-tests", "stats.go · запрещено", "РАЗБОР · правило", "Сломалось на шаге 3", "Причина: Агенту запрещено менять файлы", "Что поправить: Разрешить агенту Edit", "✗ провал"} {
+	for _, want := range []string{"run-02 · ✗ провал · haiku · no-edit · fix-tests", "stats.go · запрещено", "РАЗБОР · правило", "Причина на шаге 3", "Причина: Агенту запрещено менять файлы", "Что поправить: Разрешить агенту Edit", "✗ провал"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("run-02 lacks %q:\n%s", want, out)
 		}
@@ -184,5 +186,42 @@ func TestReverseOnlyOnSelectedRowOfFocusedPane(t *testing.T) {
 	out = press(m, "tab").render()
 	if l := lineWith(out, "ПРОГОНЫ"); l == "" || hasRev(l) {
 		t.Errorf("ПРОГОНЫ title must not be reversed: %q", l)
+	}
+}
+
+func TestStepTagsAndGlyphs(t *testing.T) {
+	m := press(sized(New(fixtures), 160, 30), "j")
+	out := plain(m)
+	if !strings.Contains(out, "⊘ Edit  stats.go · запрещено ← разбор") {
+		t.Errorf("denied cause step needs both tags and the ⊘ glyph at 160:\n%s", out)
+	}
+	if strings.Count(out, "← разбор") != 1 {
+		t.Errorf("exactly one step carries the link:\n%s", out)
+	}
+	// Narrow: only the link fits next to the summary.
+	m = press(sized(New(fixtures), 80, 30), "j")
+	st := &m.runs[m.visible[m.sel]].Steps[2]
+	st.Line = strings.Repeat("a", 14)
+	out = plain(m)
+	if !strings.Contains(out, "a ← разбор") || strings.Contains(out, "запрещено ←") {
+		t.Errorf("link must win when both tags do not fit:\n%s", out)
+	}
+	// Step view status.
+	if out = plain(press(sized(New(fixtures), 100, 30), "j", "tab", "j", "j", "enter")); !strings.Contains(out, "Статус: ⊘ запрещено") {
+		t.Errorf("step view status:\n%s", out)
+	}
+	// No link without a diagnosis or with failed_step 0.
+	m = sized(New(fixtures), 160, 30)
+	m.runs[m.visible[m.sel]].Postmortem = &trace.Postmortem{}
+	if strings.Contains(plain(m), "← разбор") {
+		t.Error("failed_step 0 has no link")
+	}
+	for _, size := range [][2]int{{80, 30}, {100, 30}, {160, 30}} {
+		m := press(sized(New(fixtures), size[0], size[1]), "j")
+		for i, l := range strings.Split(plain(m), "\n") {
+			if w := lipgloss.Width(l); w != size[0] {
+				t.Errorf("%v line %d width %d", size, i, w)
+			}
+		}
 	}
 }

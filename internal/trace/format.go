@@ -17,6 +17,22 @@ func (s Status) Glyph() string {
 	return "…"
 }
 
+// Glyph: a blocked call is not a failed one.
+func (s Step) Glyph() string {
+	switch {
+	case s.Denied:
+		return "⊘"
+	case s.IsError:
+		return "✗"
+	}
+	return "✓"
+}
+
+// CauseStep reports whether the diagnosis points at step s.
+func (r Run) CauseStep(s Step) bool {
+	return r.Postmortem != nil && r.Postmortem.FailedStep == s.N
+}
+
 func FmtDuration(d time.Duration) string {
 	switch {
 	case d <= 0:

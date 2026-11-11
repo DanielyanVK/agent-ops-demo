@@ -33,7 +33,7 @@ func TestWhyPostmortem(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	if !strings.HasPrefix(got, "run-02 · ✗ провал\n\nСломалось на шаге 3: Edit ") ||
+	if !strings.HasPrefix(got, "run-02 · ✗ провал\n\nПричина на шаге 3: Edit ") ||
 		!strings.Contains(got, "\nПричина: Агенту запрещено менять файлы") || !strings.Contains(got, "\nЧто поправить: Разрешить агенту Edit") {
 		t.Errorf("got:\n%s", got)
 	}
@@ -78,5 +78,32 @@ func TestWhyJSON(t *testing.T) {
 		if v.ID != id || (string(v.Postmortem) != "null") != wantPM {
 			t.Errorf("%s: %+v", id, v)
 		}
+	}
+}
+
+// The diagnosis may point at a step that ran (not denied) or at none.
+func TestShowAndWhyDiagnosisLink(t *testing.T) {
+	dir := copyRuns(t)
+	pm := func(n string) {
+		writeFile(t, dir+"/run-02/postmortem.json", `{"failed_step":`+n+`,"cause":"c","fix":"f","source":"model","cost_usd":0}`)
+	}
+	show := func() string {
+		var out bytes.Buffer
+		if err := runShow([]string{"--runs", dir, "run-02"}, &out); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()
+	}
+	pm("4")
+	if got := show(); !strings.Contains(got, "\n4 ✓ Bash go test ./...") || !strings.Contains(got, "3.0с ← разбор\n") || strings.Contains(got, "0.2с · запрещено ←") {
+		t.Errorf("step 4:\n%s", got)
+	}
+	var out bytes.Buffer
+	if err := runWhy([]string{"--runs", dir, "run-02"}, &out); err != nil || !strings.Contains(out.String(), "\nПричина на шаге 4: Bash go test ./...\n") {
+		t.Errorf("why: %v\n%s", err, out.String())
+	}
+	pm("0")
+	if got := show(); strings.Contains(got, "разбор") || !strings.Contains(got, "0.2с · запрещено\n") {
+		t.Errorf("failed_step 0:\n%s", got)
 	}
 }

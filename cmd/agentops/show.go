@@ -119,13 +119,13 @@ func runShow(args []string, stdout io.Writer) error {
 		toolW = max(toolW, utf8.RuneCountInString(oneLine(s.Tool)))
 	}
 	for _, s := range run.Steps {
-		mark := "✓"
-		if s.IsError {
-			mark = "✗"
-		}
+		mark := s.Glyph()
 		tag := ""
 		if s.Denied {
 			tag = " · запрещено"
+		}
+		if run.CauseStep(s) {
+			tag += " ← разбор"
 		}
 		fmt.Fprintf(stdout, "%*d %s %s %s %6s%s\n", numW, s.N, mark, padRight(oneLine(s.Tool), toolW), padRight(oneLine(s.Summary), 60),
 			trace.FmtDuration(s.Duration), tag)

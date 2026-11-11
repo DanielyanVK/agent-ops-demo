@@ -258,7 +258,7 @@ func (m Model) pmBlock() []string {
 	where := "Сбой не привязан к одному шагу"
 	if pm.FailedStep >= 1 && pm.FailedStep <= len(r.Steps) {
 		s := r.Steps[pm.FailedStep-1]
-		where = fmt.Sprintf("Сломалось на шаге %d: %s %s", s.N, oneLine(s.Tool), oneLine(s.Summary))
+		where = fmt.Sprintf("Причина на шаге %d: %s %s", s.N, oneLine(s.Tool), oneLine(s.Summary))
 	}
 	for _, p := range []string{where, "Причина: " + pm.Cause, "Что поправить: " + pm.Fix} {
 		lines = append(lines, strings.Split(ansi.Wrap(trace.Clean(p), w, ""), "\n")...)
@@ -301,23 +301,38 @@ func (m Model) stepRowLines(w int) []string {
 	numW := len(fmt.Sprint(len(r.Steps)))
 	var lines []string
 	for i, s := range r.Steps {
-		g, st := "✓", green
-		if s.IsError {
-			g, st = "✗", red
+		g, st := s.Glyph(), green
+		switch g {
+		case "✗":
+			st = red
+		case "⊘":
+			st = dim
 		}
 		marker := " "
 		if m.focus == focusSteps && i == m.step {
 			marker = "▶"
 		}
 		summary := oneLine(s.Line)
-		const tag = " · запрещено"
+		const tag, link = " · запрещено", " ← разбор"
 		lead, right := padLeft(fmt.Sprint(s.N), numW)+" ", padLeft(trace.FmtDuration(s.Duration), 6)
 		room := midWidth(w, lead, right) - toolW - 2
-		if s.Denied && lipgloss.Width(summary)+lipgloss.Width(tag) <= room {
-			summary += tag
-		} else if lipgloss.Width(summary) > room {
-			summary = ansi.Truncate(summary, max(0, room-1), "") + "…"
+		tags := ""
+		if s.Denied {
+			tags = tag
 		}
+		if r.CauseStep(s) {
+			tags += link
+		}
+		if lipgloss.Width(summary)+lipgloss.Width(tags) > room {
+			tags = "" // the link wins when both do not fit
+			if r.CauseStep(s) {
+				tags = link
+			}
+		}
+		if lipgloss.Width(summary)+lipgloss.Width(tags) > room {
+			summary = ansi.Truncate(summary, max(0, room-lipgloss.Width(tags)-1), "") + "…"
+		}
+		summary += tags
 		mid := fit(oneLine(s.Tool), toolW) + "  " + summary
 		lines = append(lines, row(w, m.focus == focusSteps && i == m.step, true, marker,
 			lead, g, st, mid, right))
@@ -332,7 +347,10 @@ func (m Model) stepLines(w int) []string {
 	}
 	s := r.Steps[m.step]
 	status := "✓ успех"
-	if s.IsError {
+	switch s.Glyph() {
+	case "⊘":
+		status = "⊘ запрещено"
+	case "✗":
 		status = "✗ ошибка"
 	}
 	lines := []string{"Инструмент: " + oneLine(s.Tool), "Статус: " + status, "Время: " + trace.FmtDuration(s.Duration), ""}
@@ -376,5 +394,7 @@ func helpLines() []string {
 		"",
 		" " + bold.Render("Мышь"),
 		"   клик по прогону или шагу выбирает его, колесо прокручивает панель под курсором",
+		"",
+		" ✓ успех · ✗ ошибка вызова · ⊘ запрещено · ← разбор — шаг с причиной",
 	}
 }

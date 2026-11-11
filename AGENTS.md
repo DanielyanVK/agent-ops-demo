@@ -14,10 +14,10 @@ Fields:
 - `check`: `percent` = passed / finished runs, integer; `min` = the threshold in percent; `ok` = percent >= min.
 - `status`: `passed`, `failed` or `running`; decided only by the original tests, never by what the agent claims.
 - `stop_reason`: how the agent stopped: `success`, `error_max_turns`, `error_during_execution`, `timeout`, `incomplete` (no result line).
-- `postmortem`: `{failed_step, cause, fix, source, cost_usd}`, or `null` until `analyze` has run; `failed_step` 0 = not tied to one step.
+- `postmortem`: `{failed_step, cause, fix, source, cost_usd}`, or `null` until `analyze` has run; `failed_step` N = the step whose own action caused the failure; 0 = the cause is the task wording, permissions or limits, not one step.
 - `source`: `rule` (free) or `model` (`cost_usd` is what the call cost).
 - `stats.cost_usd`: what the agent runs cost; `stats.postmortem_cost_usd`: what the model diagnoses cost (sum over all runs).
-- `steps[]`: `{n, tool, summary, error, denied, duration_ms}`; `denied` = the tool was blocked; `denials` lists blocked tools.
+- `steps[]`: `{n, tool, summary, error, denied, duration_ms}`; `denied` = the call was blocked by permissions (not a failure of the run, and not an `error`); `denials` lists blocked tools.
 - `verdict.test_output`: the last 2000 bytes of the test run. Durations are integer milliseconds, costs USD floats.
 
 Scenarios: `baseline` is the control; `no-edit` (a permission removed), `one-turn` (a turn limit of one) and `bad-task` (a misleading task) are deliberately sabotaged to show how failures are diagnosed; `few-turns` sits at the edge and may pass or fail.
