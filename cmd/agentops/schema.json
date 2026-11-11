@@ -344,7 +344,7 @@
           "description": "The requested step with its text",
           "properties": {
             "denied": {
-              "description": "The call was blocked by permissions; not an error",
+              "description": "The call was blocked by permissions; error is also true",
               "type": "boolean"
             },
             "duration_ms": {
@@ -457,7 +457,7 @@
       "additionalProperties": false,
       "properties": {
         "denied": {
-          "description": "The call was blocked by permissions; not an error",
+          "description": "The call was blocked by permissions; error is also true",
           "type": "boolean"
         },
         "duration_ms": {

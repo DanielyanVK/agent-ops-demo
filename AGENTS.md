@@ -7,9 +7,9 @@ Build once: `go build -o agentops ./cmd/agentops` (`go run` turns every non-zero
 1. `./agentops check --json` - is the gate green: `{"finished","passed","percent","min","ok"}`.
 2. `./agentops ls --failed --json` - what failed and why, in one call: `stats` and one object per failed run, with its `postmortem`.
 3. `./agentops show <id> --json` - one run with its step list, no bulky text.
-4. `./agentops show <id> --step N --json` - one step with its `input` and `output`; only when the postmortem is not enough. A postmortem's `failed_step` N > 0 lets you skip call 3 and go straight here. Each text is capped at `--max-bytes K` (default 4000, `0` = no limit): longer text keeps its first and last K/2 bytes around a `… [обрезано N байт] …` line.
+4. `./agentops show <id> --step N --json` - one step with its `input` and `output`; only when the postmortem is not enough. A postmortem's `failed_step` N > 0 lets you skip call 3 and go straight here. Each text is capped at `--max-bytes K` (default 4000, `0` = no limit): longer text keeps its first and last K/2 bytes around a `… [обрезано N байт] …` line. It works for any run and any step number, not only failed ones. The reply is {"id", "step": {...}}. The marker line is added on top of the K bytes.
 
-`./agentops schema` prints the exact shape of every `--json` output as JSON Schema (about 14 KB): read it only to validate or generate code; the field list below is enough for reading results.
+`./agentops schema` prints the exact shape of every `--json` output as JSON Schema (about 14 KB): read it only to validate or generate code; the field list below is enough for reading results. Its `$defs` keys are `ls`, `show`, `show_step`, `why`, `check`, `run`, `analyze`, plus the shared `run_brief`, `step_brief`, `stats`, `postmortem`, `verdict`.
 
 Fields:
 
@@ -19,11 +19,11 @@ Fields:
 - `postmortem`: `{failed_step, cause, fix, source, cost_usd}`, or `null` until `analyze` has run; `failed_step` N = the step whose own action caused the failure; 0 = the cause is the task wording, permissions or limits, not one step.
 - `source`: `rule` (free) or `model` (`cost_usd` is what the call cost).
 - `stats.cost_usd`: what the agent runs cost; `stats.postmortem_cost_usd`: what the model diagnoses cost (sum over all runs).
-- `steps[]`: `{n, tool, summary, error, denied, duration_ms}`; a `--step` object adds `input`, `output`, `input_bytes`, `output_bytes` (full sizes) and `truncated` (something was cut); `denied` = the call was blocked by permissions (not a failure of the run, and not an `error`); `denials` lists blocked tools.
+- `steps[]`: `{n, tool, summary, error, denied, duration_ms}`; a `--step` object adds `input`, `output`, `input_bytes`, `output_bytes` (full sizes) and `truncated` (something was cut); `denied` = the call was blocked by permissions; such a step also has `error: true` because the call returned an error, so check `denied` first — a blocked call is not a failure of the run; `denials` lists blocked tools.
 - `verdict.test_output`: the last 2000 bytes of the test run. Durations are integer milliseconds, costs USD floats.
 
 Scenarios: `baseline` is the control; `no-edit` (a permission removed), `one-turn` (a turn limit of one) and `bad-task` (a misleading task) are deliberately sabotaged to show how failures are diagnosed; `few-turns` sits at the edge and may pass or fail.
 
 Exit codes: 0 success; 1 an error, or `check` below its threshold; 2 unknown command; 130 `run` interrupted. Exit 1 from `check` with JSON `"ok": false` means the gate is red, not that the command failed: a command error prints `agentops: …` on stderr and no JSON.
 
-Never read `runs/*/trace.jsonl` directly: it is 10–20 KB per run, and the calls above carry what you need.
+Never read `runs/*/trace.jsonl` directly: it is 2–18 KB per run, and the calls above carry what you need.

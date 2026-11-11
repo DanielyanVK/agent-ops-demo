@@ -19,7 +19,7 @@ type StepBrief struct {
 	Tool       string `json:"tool" doc:"Tool the agent called: Read, Edit, Bash, ..."`
 	Summary    string `json:"summary" doc:"One-line summary of the call"`
 	Error      bool   `json:"error" doc:"The tool result was an error"`
-	Denied     bool   `json:"denied" doc:"The call was blocked by permissions; not an error"`
+	Denied     bool   `json:"denied" doc:"The call was blocked by permissions; error is also true"`
 	DurationMS int64  `json:"duration_ms" doc:"Step duration in milliseconds"`
 }
 
