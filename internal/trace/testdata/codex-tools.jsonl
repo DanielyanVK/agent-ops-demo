@@ -1,0 +1,14 @@
+{"type":"thread.started","ts":"2026-11-01T10:00:00.000Z"}
+{"type":"turn.started","ts":"2026-11-01T10:00:00.100Z"}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution"},"ts":"2026-11-01T10:00:01.000Z"}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/zsh -lc \"sed -n '1,200p' /Users/tester/.codex/plugins/cache/x/superpowers/7.0.1/skills/systematic-debugging/SKILL.md\"","aggregated_output":"# Debugging","exit_code":0,"status":"completed"},"ts":"2026-11-01T10:00:01.400Z"}
+{"type":"item.completed","item":{"id":"item_2","type":"command_execution","command":"/bin/bash -lc 'cat ~/.codex/skills/go-test-fixer/SKILL.md ~/.codex/skills/go-test-fixer/SKILL.md ~/.codex/skills/other/SKILL.md'","aggregated_output":"","exit_code":0,"status":"completed"},"ts":"2026-11-01T10:00:01.500Z"}
+{"type":"item.completed","item":{"id":"item_3","type":"command_execution","command":"/bin/sh -lc ls","aggregated_output":"calc.go","exit_code":0,"status":"completed"},"ts":"2026-11-01T10:00:01.600Z"}
+{"type":"item.started","item":{"id":"item_4","type":"mcp_tool_call"},"ts":"2026-11-01T10:00:02.000Z"}
+{"type":"item.completed","item":{"id":"item_4","type":"mcp_tool_call","server":"notion","tool":"search","status":"completed"},"ts":"2026-11-01T10:00:03.000Z"}
+{"type":"item.completed","item":{"id":"item_5","type":"mcp_tool_call","server":"notion","tool":"search","status":"failed"},"ts":"2026-11-01T10:00:03.500Z"}
+{"type":"item.completed","item":{"id":"item_6","type":"mcp_tool_call","server":"notion","tool":"fetch","status":"completed"},"ts":"2026-11-01T10:00:03.600Z"}
+{"type":"item.completed","item":{"id":"item_7","type":"web_search","query":"go slices.Sort"},"ts":"2026-11-01T10:00:04.000Z"}
+{"type":"item.completed","item":{"id":"item_8","type":"file_change","changes":[{"path":"/work/calc.go","kind":"update"},{"path":"/work/util/x.go","kind":"add"}],"status":"failed"},"ts":"2026-11-01T10:00:04.500Z"}
+{"type":"item.completed","item":{"id":"item_9","type":"reasoning","id2":"x","text":"thinking"},"ts":"2026-11-01T10:00:04.600Z"}
+{"type":"turn.failed","error":{"message":"stream disconnected"},"ts":"2026-11-01T10:00:06.000Z"}

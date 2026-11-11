@@ -42,7 +42,11 @@ func LoadRun(dir string) (Run, error) {
 	// A run that has just started has no trace yet.
 	if f, err := os.Open(filepath.Join(dir, "trace.jsonl")); err == nil {
 		defer f.Close()
-		if run, err = ParseClaude(f); err != nil {
+		parse := ParseClaude
+		if meta.Agent == "codex" {
+			parse = ParseCodex
+		}
+		if run, err = parse(f); err != nil {
 			return run, fmt.Errorf("trace.jsonl: %w", err)
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {

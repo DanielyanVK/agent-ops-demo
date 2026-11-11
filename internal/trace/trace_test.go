@@ -3,6 +3,7 @@ package trace
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -95,11 +96,11 @@ func TestParseLongLine(t *testing.T) {
 }
 
 func TestSummaryTruncation(t *testing.T) {
-	got := summarize("Bash", []byte(`{"command":"`+strings.Repeat("я", 70)+`"}`))
+	got := cut60(stepLine("Bash", []byte(`{"command":"`+strings.Repeat("я", 70)+`"}`)))
 	if r := []rune(got); len(r) != 60 || r[59] != '…' {
 		t.Fatalf("got %q", got)
 	}
-	if summarize("WebFetch", []byte(`{"url":"u"}`)) != "" {
+	if stepLine("WebFetch", []byte(`{"url":"u"}`)) != "" {
 		t.Fatal("unknown tool must have empty summary")
 	}
 }
@@ -117,7 +118,7 @@ func TestStepLineIsUncut(t *testing.T) {
 			t.Errorf("%s: line %q", c.tool, got)
 		}
 	}
-	if got := summarize("Bash", []byte(cases[0].in)); len([]rune(got)) != 60 {
+	if got := cut60(stepLine("Bash", []byte(cases[0].in))); len([]rune(got)) != 60 {
 		t.Errorf("summary must stay cut: %q", got)
 	}
 }
@@ -328,5 +329,45 @@ func TestCompareIDsIsTotal(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestParseClaudeKindsAndUse(t *testing.T) {
+	r := parseFile(t, "testdata/claude-tools.jsonl")
+	type kn struct{ kind, name string }
+	var got []kn
+	for _, s := range r.Steps {
+		got = append(got, kn{s.Kind, s.Name})
+	}
+	want := []kn{{"skill", "go-test-fixer"}, {"mcp", "notion.search"}, {"mcp", "notion.search"}, {"mcp", "notion.fetch__page"},
+		{"subagent", "Explore"}, {"subagent", "Plan"}, {"web", ""}, {"web", ""}, {"skill", "go-test-fixer"}, {"skill", "other"},
+		{"shell", ""}, {"read", ""}, {"edit", ""}, {"search", ""}, {"other", ""}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("kinds:\n got %v\nwant %v", got, want)
+	}
+	if !reflect.DeepEqual(r.Skills, []string{"go-test-fixer", "other"}) ||
+		!reflect.DeepEqual(r.MCP, []ToolCount{{"notion.search", 2}, {"notion.fetch__page", 1}}) || r.Subagents != 2 || r.WebCalls != 2 {
+		t.Errorf("used: %v %v %d %d", r.Skills, r.MCP, r.Subagents, r.WebCalls)
+	}
+	if r.TokensIn != 420 || r.TokensOut != 40 {
+		t.Errorf("tokens %d %d", r.TokensIn, r.TokensOut)
+	}
+	// A named step shows its name; a plain one its call.
+	if r.Steps[0].Line != "go-test-fixer" || r.Steps[0].Summary != "go-test-fixer" || r.Steps[10].Line != "go test ./..." {
+		t.Errorf("lines: %q %q", r.Steps[0].Line, r.Steps[10].Line)
+	}
+	if r.Steps[1].Text() != "notion.search" || r.Steps[10].Text() != "go test ./..." {
+		t.Errorf("text: %q %q", r.Steps[1].Text(), r.Steps[10].Text())
+	}
+}
+
+func TestRecordedRunsKeepTheirShape(t *testing.T) {
+	r := parseFile(t, "testdata/runs/run-01/trace.jsonl")
+	if r.Skills != nil || r.MCP != nil || r.Subagents != 0 || r.WebCalls != 0 {
+		t.Errorf("nothing used in run-01: %+v", r)
+	}
+	kinds := []string{r.Steps[0].Kind, r.Steps[1].Kind, r.Steps[2].Kind}
+	if !reflect.DeepEqual(kinds, []string{"read", "shell", "edit"}) {
+		t.Errorf("kinds %v", kinds)
 	}
 }

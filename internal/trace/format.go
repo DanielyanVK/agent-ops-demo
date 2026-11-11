@@ -28,6 +28,21 @@ func (s Step) Glyph() string {
 	return "✓"
 }
 
+// Text is what a step row shows: the name of a skill, MCP tool or subagent,
+// otherwise the one-line call.
+func (s Step) Text() string {
+	switch s.Kind {
+	case "skill", "mcp", "subagent":
+		if s.Name != "" {
+			return s.Name
+		}
+	}
+	return s.Line
+}
+
+// ShortText is Text cut like Summary.
+func (s Step) ShortText() string { return cut60(s.Text()) }
+
 // CauseStep reports whether the diagnosis points at step s.
 func (r Run) CauseStep(s Step) bool {
 	return r.Postmortem != nil && r.Postmortem.FailedStep == s.N

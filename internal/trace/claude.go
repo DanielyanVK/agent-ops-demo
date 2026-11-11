@@ -18,11 +18,17 @@ type line struct {
 	Message   struct {
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
-	IsError           bool    `json:"is_error"`
-	DurationMS        int64   `json:"duration_ms"`
-	NumTurns          int     `json:"num_turns"`
-	Result            string  `json:"result"`
-	TotalCostUSD      float64 `json:"total_cost_usd"`
+	IsError      bool    `json:"is_error"`
+	DurationMS   int64   `json:"duration_ms"`
+	NumTurns     int     `json:"num_turns"`
+	Result       string  `json:"result"`
+	TotalCostUSD float64 `json:"total_cost_usd"`
+	Usage        struct {
+		InputTokens              int `json:"input_tokens"`
+		CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+		CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+		OutputTokens             int `json:"output_tokens"`
+	} `json:"usage"`
 	PermissionDenials []struct {
 		ToolUseID string `json:"tool_use_id"`
 	} `json:"permission_denials"`
@@ -80,9 +86,7 @@ func finish(run *Run) {
 			s.Denied = true
 		}
 	}
-	for _, b := range run.Blocked() {
-		run.Denials = append(run.Denials, b.Tool)
-	}
+	run.collect()
 }
 
 func apply(run *Run, l *line, index map[string]int, started map[string]time.Time) {
@@ -97,7 +101,12 @@ func apply(run *Run, l *line, index map[string]int, started map[string]time.Time
 			if b.Type != "tool_use" {
 				continue
 			}
-			s := Step{N: len(run.Steps) + 1, Tool: b.Name, Summary: summarize(b.Name, b.Input), Line: stepLine(b.Name, b.Input)}
+			s := Step{N: len(run.Steps) + 1, Tool: b.Name, Line: stepLine(b.Name, b.Input)}
+			s.Kind, s.Name = claudeKind(b.Name, b.Input)
+			if s.Line == "" {
+				s.Line = s.Name
+			}
+			s.Summary = cut60(s.Line)
 			var buf bytes.Buffer
 			if json.Indent(&buf, b.Input, "", "  ") == nil {
 				s.Input = buf.String()
@@ -126,6 +135,9 @@ func apply(run *Run, l *line, index map[string]int, started map[string]time.Time
 		run.Result = l.Result
 		run.ResultError = l.IsError
 		run.StopReason = l.Subtype
+		u := l.Usage
+		run.TokensIn = u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+		run.TokensOut = u.OutputTokens
 		for _, d := range l.PermissionDenials {
 			if i, ok := index[d.ToolUseID]; ok {
 				run.Steps[i].Denied = true
@@ -155,10 +167,40 @@ func flatten(raw json.RawMessage) string {
 	return strings.Join(parts, "\n")
 }
 
-func summarize(tool string, input json.RawMessage) string {
-	s := stepLine(tool, input)
+// claudeKind classifies a tool call and names the skill, MCP tool or subagent it uses.
+func claudeKind(tool string, input json.RawMessage) (kind, name string) {
+	var in struct {
+		Skill        string `json:"skill"`
+		SubagentType string `json:"subagent_type"`
+	}
+	_ = json.Unmarshal(input, &in)
+	switch tool {
+	case "Bash":
+		return "shell", ""
+	case "Read":
+		return "read", ""
+	case "Edit", "Write", "MultiEdit", "NotebookEdit":
+		return "edit", ""
+	case "Glob", "Grep":
+		return "search", ""
+	case "Skill":
+		return "skill", in.Skill
+	case "Task", "Agent":
+		return "subagent", in.SubagentType
+	case "WebSearch", "WebFetch":
+		return "web", ""
+	}
+	if rest, ok := strings.CutPrefix(tool, "mcp__"); ok {
+		server, t, _ := strings.Cut(rest, "__")
+		return "mcp", server + "." + t
+	}
+	return "other", ""
+}
+
+// cut60 is the summary cut: 60 runes, the last one an ellipsis when something was dropped.
+func cut60(s string) string {
 	if r := []rune(s); len(r) > 60 {
-		s = string(r[:59]) + "…"
+		return string(r[:59]) + "…"
 	}
 	return s
 }

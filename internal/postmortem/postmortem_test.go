@@ -85,7 +85,7 @@ func TestByRule(t *testing.T) {
 		if pm, _ := ByRule(trace.Run{StopReason: "error_max_turns"}); !strings.HasPrefix(pm.Cause, "Агент не начал работу") {
 			t.Errorf("no steps must win over the turn limit: %q", pm.Cause)
 		}
-		blocked := trace.Run{StopReason: "error_max_turns", Steps: []trace.Step{{N: 1, Tool: "Edit", Denied: true}}}
+		blocked := trace.Run{StopReason: "error_max_turns", Steps: []trace.Step{{N: 1, Tool: "Edit", Kind: "edit", Denied: true}}}
 		if pm, _ := ByRule(blocked); !strings.HasPrefix(pm.Cause, "Агенту запрещено менять файлы") {
 			t.Errorf("a blocked edit must win over the turn limit: %q", pm.Cause)
 		}
@@ -93,9 +93,9 @@ func TestByRule(t *testing.T) {
 	t.Run("blocked edit", func(t *testing.T) {
 		r := trace.Run{Steps: []trace.Step{
 			{N: 1, Tool: "Bash", Denied: true},
-			{N: 2, Tool: "Edit", Denied: true},
-			{N: 3, Tool: "Write", Denied: true},
-			{N: 4, Tool: "Edit", Denied: true},
+			{N: 2, Tool: "Edit", Kind: "edit", Denied: true},
+			{N: 3, Tool: "Write", Kind: "edit", Denied: true},
+			{N: 4, Tool: "Edit", Kind: "edit", Denied: true},
 		}}
 		pm, ok := ByRule(r)
 		if !ok || pm.FailedStep != 2 ||
@@ -287,5 +287,29 @@ func TestAnalyzeFailures(t *testing.T) {
 	script("echo boom >&2; exit 3\n")
 	if _, err = Analyze(context.Background(), noRule(), "haiku"); err == nil || !strings.HasSuffix(err.Error(), ": boom") {
 		t.Errorf("stderr: %q", err)
+	}
+}
+
+func TestByRuleOnCodexRuns(t *testing.T) {
+	parse := func(lines string) trace.Run {
+		r, err := trace.ParseCodex(strings.NewReader(lines))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	empty := parse(`{"type":"turn.started"}` + "\n")
+	if pm, ok := ByRule(empty); !ok || !strings.HasPrefix(pm.Cause, "Агент не начал работу") {
+		t.Errorf("no steps: %+v, %v", pm, ok)
+	}
+	blocked := parse(`{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"ls","aggregated_output":"","exit_code":0,"status":"completed"}}` + "\n" +
+		`{"type":"item.completed","item":{"id":"b","type":"file_change","changes":[{"path":"/work/calc.go","kind":"update"}],"status":"failed"}}` + "\n")
+	blocked.Steps[1].Denied = true // the parser marks it only when the output says so
+	if pm, ok := ByRule(blocked); !ok || pm.FailedStep != 2 || !strings.Contains(pm.Cause, "Агенту запрещено менять файлы") {
+		t.Errorf("blocked edit: %+v, %v", pm, ok)
+	}
+	timeout := parse(`{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"ls","exit_code":0,"status":"completed"}}` + "\n" + `{"type":"timeout"}` + "\n")
+	if pm, ok := ByRule(timeout); !ok || pm.Cause != "Агент не уложился в отведённое время" {
+		t.Errorf("timeout: %+v, %v", pm, ok)
 	}
 }

@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -26,14 +25,21 @@ func cut(s string, n int) string {
 	return s
 }
 
-var editTools = []string{"Edit", "Write", "MultiEdit", "NotebookEdit"}
-
+// blockedEdits counts denied file edits per tool; Kind covers every agent's edit tools.
 func blockedEdits(r trace.Run) []trace.ToolCount {
 	var out []trace.ToolCount
-	for _, b := range r.Blocked() {
-		if slices.Contains(editTools, b.Tool) {
-			out = append(out, b)
+next:
+	for _, s := range r.Steps {
+		if !s.Denied || s.Kind != "edit" {
+			continue
 		}
+		for i := range out {
+			if out[i].Tool == s.Tool {
+				out[i].N++
+				continue next
+			}
+		}
+		out = append(out, trace.ToolCount{Tool: s.Tool, N: 1})
 	}
 	return out
 }
@@ -53,7 +59,7 @@ func ByRule(r trace.Run) (trace.Postmortem, bool) {
 		// present; if runs appear where the agent was blocked but failed for another
 		// reason, send those to the model too.
 		for _, s := range r.Steps {
-			if s.Denied && slices.Contains(editTools, s.Tool) {
+			if s.Denied && s.Kind == "edit" {
 				pm.FailedStep = s.N
 				break
 			}
