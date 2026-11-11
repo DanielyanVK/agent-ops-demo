@@ -53,7 +53,7 @@ func runWhy(args []string, stdout io.Writer) error {
 		switch {
 		case pm.FailedStep >= 1 && pm.FailedStep <= len(run.Steps):
 			s := run.Steps[pm.FailedStep-1]
-			where = fmt.Sprintf("Причина на шаге %d: %s %s", pm.FailedStep, s.Tool, s.Summary)
+			where = fmt.Sprintf("Причина на шаге %d: %s %s", pm.FailedStep, s.Label(), s.Summary)
 		case pm.FailedStep != 0: // postmortem written for a different trace; don't invent a tool
 			where = fmt.Sprintf("Причина на шаге %d", pm.FailedStep)
 		}

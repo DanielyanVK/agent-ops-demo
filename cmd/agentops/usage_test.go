@@ -148,3 +148,18 @@ func TestSkillStepIsLabelledSkillForBothAgents(t *testing.T) {
 		t.Errorf("JSON tool must stay Shell: %s", out.String())
 	}
 }
+
+func TestWhyPrintsTheStepLabel(t *testing.T) {
+	runs := usageRuns(t)
+	if err := os.WriteFile(filepath.Join(runs, "run-02", "postmortem.json"), []byte(`{"failed_step":1,"cause":"c","fix":"f","source":"rule","cost_usd":0}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(runs, "run-02", "meta.json"), []byte(`{"id":"run-02","task":"fix-tests","agent":"codex","model":"default","scenario":"skill","verdict":{"passed":false,"test_output":""}}`), 0o644)
+	var out bytes.Buffer
+	if err := runWhy([]string{"--runs", runs, "run-02"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Причина на шаге 1: Skill ") || strings.Contains(out.String(), "Shell") {
+		t.Errorf("%s", out.String())
+	}
+}
