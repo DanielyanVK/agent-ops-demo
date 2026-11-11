@@ -97,7 +97,7 @@ func apply(run *Run, l *line, index map[string]int, started map[string]time.Time
 			if b.Type != "tool_use" {
 				continue
 			}
-			s := Step{N: len(run.Steps) + 1, Tool: b.Name, Summary: summarize(b.Name, b.Input)}
+			s := Step{N: len(run.Steps) + 1, Tool: b.Name, Summary: summarize(b.Name, b.Input), Line: stepLine(b.Name, b.Input)}
 			var buf bytes.Buffer
 			if json.Indent(&buf, b.Input, "", "  ") == nil {
 				s.Input = buf.String()
@@ -156,6 +156,15 @@ func flatten(raw json.RawMessage) string {
 }
 
 func summarize(tool string, input json.RawMessage) string {
+	s := stepLine(tool, input)
+	if r := []rune(s); len(r) > 60 {
+		s = string(r[:59]) + "…"
+	}
+	return s
+}
+
+// stepLine is the one-line step text before the summary cut.
+func stepLine(tool string, input json.RawMessage) string {
 	var in struct {
 		FilePath string `json:"file_path"`
 		Command  string `json:"command"`
@@ -170,9 +179,6 @@ func summarize(tool string, input json.RawMessage) string {
 		s, _, _ = strings.Cut(in.Command, "\n")
 	case "Grep", "Glob":
 		s = in.Pattern
-	}
-	if r := []rune(s); len(r) > 60 {
-		s = string(r[:59]) + "…"
 	}
 	return s
 }

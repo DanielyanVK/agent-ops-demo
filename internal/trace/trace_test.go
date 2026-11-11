@@ -104,6 +104,24 @@ func TestSummaryTruncation(t *testing.T) {
 	}
 }
 
+func TestStepLineIsUncut(t *testing.T) {
+	long := strings.Repeat("я", 70)
+	cases := []struct{ tool, in, line string }{
+		{"Bash", `{"command":"` + long + `\nsecond"}`, long},
+		{"Read", `{"file_path":"/work/a/b.go"}`, "a/b.go"},
+		{"Grep", `{"pattern":"func Mean"}`, "func Mean"},
+		{"WebFetch", `{"url":"u"}`, ""},
+	}
+	for _, c := range cases {
+		if got := stepLine(c.tool, []byte(c.in)); got != c.line {
+			t.Errorf("%s: line %q", c.tool, got)
+		}
+	}
+	if got := summarize("Bash", []byte(cases[0].in)); len([]rune(got)) != 60 {
+		t.Errorf("summary must stay cut: %q", got)
+	}
+}
+
 func TestLoadDir(t *testing.T) {
 	runs, warns, err := LoadDir("testdata/runs")
 	if err != nil || len(warns) != 0 || len(runs) != 3 {

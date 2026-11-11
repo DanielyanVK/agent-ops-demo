@@ -29,6 +29,7 @@ type Step struct {
 	N        int    // 1-based
 	Tool     string // tool_use name: Read, Edit, Bash, …
 	Summary  string // one line, see "Step summary"
+	Line     string // Summary before the 60-rune cut; TUI only, not in JSON output
 	Input    string // tool input as indented JSON
 	Output   string // tool_result content flattened to text
 	IsError  bool   // tool_result.is_error

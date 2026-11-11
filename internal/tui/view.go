@@ -19,6 +19,7 @@ var (
 	dim    = lipgloss.NewStyle().Faint(true)
 	bold   = lipgloss.NewStyle().Bold(true)
 	hilite = lipgloss.NewStyle().Bold(true).Reverse(true)
+	accent = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
 )
 
 var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -170,7 +171,7 @@ func (m Model) leftLines() []string {
 	}
 	t := dim.Render(fit(" "+title, listW))
 	if m.focus == focusList {
-		t = hilite.Render(fit(" "+title, listW))
+		t = accent.Render(fit(" "+title, listW))
 	}
 	lines := []string{t, ""}
 	if len(m.visible) == 0 {
@@ -217,9 +218,9 @@ func (m Model) rightLines() []string {
 	}
 	title := fit(" "+strings.Join(parts, " · "), m.rightW()+2)
 	if m.focus == focusSteps {
-		title = hilite.Render(title)
+		title = accent.Render(title)
 	} else {
-		title = bold.Render(title)
+		title = dim.Render(title)
 	}
 	out := []string{title, ""}
 	if pm := m.pmBlock(); pm != nil {
@@ -308,11 +309,14 @@ func (m Model) stepRowLines(w int) []string {
 		if m.focus == focusSteps && i == m.step {
 			marker = "▶"
 		}
-		summary := oneLine(s.Summary)
+		summary := oneLine(s.Line)
 		const tag = " · запрещено"
 		lead, right := padLeft(fmt.Sprint(s.N), numW)+" ", padLeft(trace.FmtDuration(s.Duration), 6)
-		if room := midWidth(w, lead, right) - toolW - 2; s.Denied && lipgloss.Width(summary)+lipgloss.Width(tag) <= room {
+		room := midWidth(w, lead, right) - toolW - 2
+		if s.Denied && lipgloss.Width(summary)+lipgloss.Width(tag) <= room {
 			summary += tag
+		} else if lipgloss.Width(summary) > room {
+			summary = ansi.Truncate(summary, max(0, room-1), "") + "…"
 		}
 		mid := fit(oneLine(s.Tool), toolW) + "  " + summary
 		lines = append(lines, row(w, m.focus == focusSteps && i == m.step, true, marker,

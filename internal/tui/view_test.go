@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestViewShowsSummaryRunsStepsAndPostmortem(t *testing.T) {
@@ -113,9 +114,75 @@ func TestDeniedTagDroppedWhenNarrow(t *testing.T) {
 		t.Fatal("tag missing at 100 columns")
 	}
 	m = press(sized(New(fixtures), 80, 30), "j")
-	m.runs[m.visible[m.sel]].Steps[2].Summary = "internal/shop/pricing/discount.go"
+	m.runs[m.visible[m.sel]].Steps[2].Line = "internal/shop/pricing/discount.go"
 	out := plain(m)
 	if strings.Contains(out, "· запрещ") || !strings.Contains(out, "internal/shop") {
 		t.Errorf("tag must be dropped, summary kept:\n%s", out)
+	}
+}
+
+func longCmdModel(w int) Model {
+	m := press(sized(New(fixtures), w, 30), "j")
+	st := &m.runs[m.visible[m.sel]].Steps[1]
+	st.Line = "go test ./... " + strings.Repeat("x", 86)
+	return m
+}
+
+func TestStepLineUsesAvailableWidth(t *testing.T) {
+	full := "go test ./... " + strings.Repeat("x", 86)
+	if out := plain(longCmdModel(160)); !strings.Contains(out, full) {
+		t.Errorf("100-rune command must be shown in full at 160 columns:\n%s", out)
+	}
+	m := longCmdModel(100)
+	out := plain(m)
+	if strings.Contains(out, full) || !strings.Contains(out, "xxx…") {
+		t.Errorf("command must be cut with an ellipsis at 100 columns:\n%s", out)
+	}
+	for i, l := range strings.Split(out, "\n") {
+		if w := lipgloss.Width(l); w != 100 {
+			t.Errorf("line %d width %d", i, w)
+		}
+	}
+}
+
+func TestDeniedTagWithLongLine(t *testing.T) {
+	for _, c := range []struct {
+		w   int
+		tag bool
+	}{{100, false}, {160, true}} {
+		m := longCmdModel(c.w)
+		m.runs[m.visible[m.sel]].Steps[1].Line = "go test ./... " + strings.Repeat("x", 56)
+		m.runs[m.visible[m.sel]].Steps[1].Denied = true
+		if got := strings.Contains(plain(m), "xxx · запрещено"); got != c.tag {
+			t.Errorf("width %d: tag shown=%v want %v", c.w, got, c.tag)
+		}
+	}
+}
+
+func lineWith(out, sub string) string {
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(ansi.Strip(l), sub) {
+			return l
+		}
+	}
+	return ""
+}
+
+func TestReverseOnlyOnSelectedRowOfFocusedPane(t *testing.T) {
+	const rev = "\x1b[7m"
+	hasRev := func(l string) bool {
+		return strings.Contains(l, rev) || strings.Contains(l, ";7m") || strings.Contains(l, ";7;")
+	}
+	m := press(sized(New(fixtures), 100, 30), "tab")
+	out := m.render()
+	if l := lineWith(out, "run-01 · ✓ успех"); l == "" || hasRev(l) {
+		t.Errorf("run header must not be reversed: %q", l)
+	}
+	if l := lineWith(out, "▶ ✓"); l == "" || !hasRev(l) {
+		t.Errorf("selected step must be reversed: %q", l)
+	}
+	out = press(m, "tab").render()
+	if l := lineWith(out, "ПРОГОНЫ"); l == "" || hasRev(l) {
+		t.Errorf("ПРОГОНЫ title must not be reversed: %q", l)
 	}
 }
