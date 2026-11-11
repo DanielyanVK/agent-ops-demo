@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 )
 
@@ -60,6 +61,9 @@ var codexIsolation = []string{"apps", "plugins", "remote_plugin", "plugin_sharin
 	"skill_mcp_dependency_install", "multi_agent", "browser_use", "browser_use_external", "computer_use",
 	"image_generation", "goals", "tool_suggest"}
 
+// codexSkillFeatures stay enabled when the scenario is about skills, so the skills installed in the user's profile are available.
+var codexSkillFeatures = []string{"plugins", "remote_plugin", "plugin_sharing", "skill_search", "skill_mcp_dependency_install"}
+
 func codexPrepare(o Options, workdir string) ([]string, []string, error) {
 	// Inside the sandbox Go's default build cache is not writable and every `go test` would fail.
 	cache, err := os.UserCacheDir()
@@ -73,6 +77,9 @@ func codexPrepare(o Options, workdir string) ([]string, []string, error) {
 	args := []string{"exec", "--json", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--skip-git-repo-check",
 		"-s", o.Scenario.CodexSandbox}
 	for _, f := range codexIsolation {
+		if o.Scenario.Skills && slices.Contains(codexSkillFeatures, f) {
+			continue
+		}
 		args = append(args, "--disable", f)
 	}
 	args = append(args, "--add-dir", gocache, "-c", "shell_environment_policy.inherit=all")

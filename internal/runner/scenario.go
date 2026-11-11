@@ -1,6 +1,9 @@
 package runner
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 type Scenario struct {
 	Name, Prompt    string
@@ -10,6 +13,8 @@ type Scenario struct {
 	MaxTurns        int
 	// CodexSandbox is the sandbox mode of a Codex run; empty = the agent does not support the scenario (Codex has no turn limit).
 	CodexSandbox string
+	// Skills lifts the isolation that hides skills from the agent.
+	Skills bool
 }
 
 const basePrompt = `The tests in this Go module fail. Find the bugs and fix them so that "go test ./..." passes. Do not modify the test files.`
@@ -34,6 +39,11 @@ var Scenarios = []Scenario{
 		Name:   "bad-task",
 		Prompt: `The tests in this Go module fail. The bug is in stats.go. Fix it so that "go test ./..." passes. Do not touch any other file.`,
 		Tools:  tools, AllowedTools: editTools, MaxTurns: 25, CodexSandbox: "workspace-write",
+	},
+	{
+		Name: "skill", Prompt: basePrompt, Skills: true, MaxTurns: 25, CodexSandbox: "workspace-write",
+		Tools:        append(slices.Clone(tools), "Skill"),
+		AllowedTools: append(slices.Clone(editTools), "Skill"),
 	},
 }
 

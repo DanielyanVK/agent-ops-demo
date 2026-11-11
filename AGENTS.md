@@ -24,7 +24,7 @@ Fields:
 - `steps[]`: `{n, tool, kind, name?, summary, error, denied, duration_ms}`; `kind` is `shell|read|edit|search|skill|mcp|subagent|web|other` for both agents, `name` is the skill, `server.tool` or subagent type; a `--step` object adds `input`, `output`, `input_bytes`, `output_bytes` (full sizes) and `truncated` (something was cut); `denied` = the call was blocked by permissions; such a step also has `error: true` because the call returned an error, so check `denied` first — a blocked call is not a failure of the run; `denials` lists blocked tools.
 - `verdict.test_output`: the last 2000 bytes of the test run. Durations are integer milliseconds, costs USD floats.
 
-Scenarios: `baseline` is the control; `no-edit` (a permission removed), `one-turn` (a turn limit of one) and `bad-task` (a misleading task) are deliberately sabotaged to show how failures are diagnosed; `few-turns` sits at the edge and may pass or fail.
+Scenarios: `baseline` is the control; `no-edit` (a permission removed), `one-turn` (a turn limit of one) and `bad-task` (a misleading task) are deliberately sabotaged to show how failures are diagnosed; `few-turns` sits at the edge and may pass or fail; `skill` is `baseline` with a skill available (it shows up in `skills`).
 
 Exit codes: 0 success; 1 an error, or `check` below its threshold; 2 unknown command; 130 `run` interrupted. Exit 1 from `check` with JSON `"ok": false` means the gate is red, not that the command failed: a command error prints `agentops: …` on stderr and no JSON.
 

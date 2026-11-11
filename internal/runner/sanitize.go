@@ -33,7 +33,7 @@ var (
 // Scrub names what must not leave the machine: tool output can carry the
 // workdir, the temp directory (go build paths), the home directory, the login
 // and full name (an `ls -la` owner column, a git author) and the host name.
-type Scrub struct{ Workdir, TempDir, Home, User, FullName, Host string }
+type Scrub struct{ Workdir, TempDir, Home, User, FullName, Host, PluginDir string }
 
 // Sanitize returns nil when the line must not be published.
 func Sanitize(line []byte, s Scrub) []byte {
@@ -60,6 +60,7 @@ func scrub(b []byte, s Scrub) []byte {
 		}
 	}
 	replacePath(s.Workdir, "/work")
+	replacePath(s.PluginDir, "/plugin") // a skill's output names its directory, inside the checkout
 	b = scratchRe.ReplaceAll(b, []byte("/scratch$1"))
 	replacePath(s.TempDir, "/tmp")
 	replace(s.Home, "~")

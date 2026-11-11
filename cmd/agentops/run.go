@@ -30,6 +30,7 @@ func runRun(args []string, stdout io.Writer) error {
 	scenarioName := fs.String("scenario", "baseline", "сценарий: "+runner.ScenarioNames())
 	agent := fs.String("agent", "claude", "агент: claude, codex")
 	model := fs.String("model", "", "модель агента (claude: haiku; codex: по умолчанию свой)")
+	plugin := fs.String("plugin", "plugin", "каталог плагина с навыком для сценария skill (claude)")
 	n := fs.Int("n", 1, "сколько прогонов выполнить")
 	asJSON := jsonFlag(fs)
 	rest, err := parseFlags(fs, args, stdout)
@@ -59,7 +60,7 @@ func runRun(args []string, stdout io.Writer) error {
 	defer stop()
 	for range *n {
 		id, err := runner.Run(ctx, runner.Options{
-			RunsDir: *runsDir, TestbedDir: *testbed, Agent: *agent, Model: *model, Scenario: sc})
+			RunsDir: *runsDir, TestbedDir: *testbed, Agent: *agent, Model: *model, Scenario: sc, PluginDir: *plugin})
 		if ctx.Err() != nil {
 			return exitCode(130)
 		}

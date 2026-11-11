@@ -32,6 +32,7 @@ type Options struct {
 	Agent      string // "claude" (default) or "codex"
 	Model      string // empty for codex = the agent's own default
 	Scenario   Scenario
+	PluginDir  string // claude plugin with the skill, for scenarios that use skills
 }
 
 type meta struct {
@@ -60,6 +61,14 @@ func Run(ctx context.Context, o Options) (id string, err error) {
 	ag, err := checkAgent(o)
 	if err != nil {
 		return "", err
+	}
+	if o.Agent == "claude" && o.Scenario.Skills {
+		if o.PluginDir, err = filepath.Abs(o.PluginDir); err != nil {
+			return "", err
+		}
+		if fi, err := os.Stat(o.PluginDir); err != nil || !fi.IsDir() {
+			return "", fmt.Errorf("каталог плагина не найден: %s (сценарию %s нужен плагин, см. --plugin)", o.PluginDir, o.Scenario.Name)
+		}
 	}
 	if fi, err := os.Stat(o.TestbedDir); err != nil || !fi.IsDir() {
 		return "", fmt.Errorf("каталог подопытного проекта не найден: %s", o.TestbedDir)
@@ -93,7 +102,7 @@ func Run(ctx context.Context, o Options) (id string, err error) {
 	}
 
 	home, _ := os.UserHomeDir()
-	s := Scrub{Workdir: workdir, TempDir: filepath.Clean(os.TempDir()), Home: home}
+	s := Scrub{Workdir: workdir, TempDir: filepath.Clean(os.TempDir()), Home: home, PluginDir: o.PluginDir}
 	if u, err := user.Current(); err == nil {
 		s.User, s.FullName = u.Username, u.Name
 	}
@@ -140,11 +149,18 @@ func writeMeta(runDir string, m meta) error {
 
 func agentArgs(o Options) []string {
 	s := o.Scenario
+	// Safe mode would disable skills; --restricted and --strict-mcp-config
+	// still keep the user's own plugins, CLAUDE.md and MCP servers out.
+	isolation := []string{"--safe-mode", "--strict-mcp-config", "--restricted"}
+	if s.Skills {
+		isolation = []string{"--plugin-dir", o.PluginDir, "--strict-mcp-config", "--restricted"}
+	}
 	// --restricted: Read and Bash cannot reach files outside the workdir, whose
 	// contents would otherwise end up in the published trace.
-	args := []string{"-p", s.Prompt, "--safe-mode", "--strict-mcp-config", "--restricted", "--model", o.Model,
+	args := append([]string{"-p", s.Prompt}, isolation...)
+	args = append(args, "--model", o.Model,
 		"--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits",
-		"--max-turns", strconv.Itoa(s.MaxTurns), "--tools", strings.Join(s.Tools, ",")}
+		"--max-turns", strconv.Itoa(s.MaxTurns), "--tools", strings.Join(s.Tools, ","))
 	if len(s.AllowedTools) > 0 {
 		args = append(args, append([]string{"--allowedTools"}, s.AllowedTools...)...)
 	}

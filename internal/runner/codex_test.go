@@ -273,3 +273,89 @@ func TestUnknownAgentIsRejected(t *testing.T) {
 		t.Errorf("err %v", err)
 	}
 }
+
+func skillRun(t *testing.T, e env, agent, pluginDir string) (string, error) {
+	t.Helper()
+	s, _ := FindScenario("skill")
+	return Run(context.Background(), Options{RunsDir: e.runs, TestbedDir: testbedDir,
+		Agent: agent, Model: "haiku", Scenario: s, PluginDir: pluginDir})
+}
+
+func TestClaudeSkillScenarioLoadsThePlugin(t *testing.T) {
+	e := setup(t, "none")
+	plugin := filepath.Join(t.TempDir(), "plug")
+	os.MkdirAll(plugin, 0o755)
+	if _, err := skillRun(t, e, "claude", plugin); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(e.args)
+	got := string(b)
+	for _, want := range []string{"--plugin-dir " + plugin + " ", "--strict-mcp-config --restricted", "--tools Read,Glob,Grep,Edit,Bash,Skill",
+		"--allowedTools Read Glob Grep Edit Bash(go test:*) Skill"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("args lack %q: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "--safe-mode") {
+		t.Errorf("safe mode disables skills: %s", got)
+	}
+}
+
+func TestSkillScenarioNeedsThePluginDirectory(t *testing.T) {
+	e := setup(t, "none")
+	_, err := skillRun(t, e, "claude", filepath.Join(t.TempDir(), "missing"))
+	if err == nil || !strings.Contains(err.Error(), "каталог плагина не найден") {
+		t.Fatalf("err %v", err)
+	}
+	if _, serr := os.Stat(e.args); serr == nil {
+		t.Error("the agent must not start")
+	}
+	if entries, _ := os.ReadDir(e.runs); len(entries) != 0 {
+		t.Errorf("run directory left: %v", entries)
+	}
+}
+
+func TestCodexSkillScenarioKeepsTheProfileSkills(t *testing.T) {
+	e := setupCodex(t, "none")
+	if _, err := skillRun(t, e, "codex", ""); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(e.args)
+	got := string(b)
+	if !strings.Contains(got, "-s workspace-write ") {
+		t.Errorf("sandbox: %s", got)
+	}
+	for _, gone := range []string{"plugins", "remote_plugin", "plugin_sharing", "skill_search", "skill_mcp_dependency_install"} {
+		if strings.Contains(got, "--disable "+gone+" ") {
+			t.Errorf("--disable %s must be lifted: %s", gone, got)
+		}
+	}
+	for _, kept := range []string{"apps", "hooks", "memories", "multi_agent", "browser_use", "computer_use", "goals", "tool_suggest"} {
+		if !strings.Contains(got, "--disable "+kept+" ") {
+			t.Errorf("--disable %s must stay: %s", kept, got)
+		}
+	}
+}
+
+func TestScrubReplacesPluginDirectory(t *testing.T) {
+	s := Scrub{Home: "/Users/tester", PluginDir: "/Users/tester/code/agentops/plugin"}
+	got := string(scrub([]byte("Base directory: /Users/tester/code/agentops/plugin/skills/x"), s))
+	if got != "Base directory: /plugin/skills/x" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestDemoPluginIsWellFormed(t *testing.T) {
+	b, err := os.ReadFile("../../plugin/.claude-plugin/plugin.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]string
+	if err := json.Unmarshal(b, &m); err != nil || m["name"] != "agentops-demo" || m["version"] != "0.1.0" {
+		t.Errorf("plugin.json: %s, %v", b, err)
+	}
+	skill, err := os.ReadFile("../../plugin/skills/go-test-fixer/SKILL.md")
+	if err != nil || !strings.HasPrefix(string(skill), "---\nname: go-test-fixer\n") {
+		t.Errorf("SKILL.md: %v", err)
+	}
+}

@@ -123,3 +123,14 @@ func TestRunAgentFlag(t *testing.T) {
 		t.Errorf("got %v", err)
 	}
 }
+
+func TestRunSkillScenarioNeedsPlugin(t *testing.T) {
+	runs := filepath.Join(t.TempDir(), "runs")
+	err := runRun([]string{"--runs", runs, "--testbed", "../../testbed", "--scenario", "skill", "--plugin", "nope"}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "каталог плагина не найден") {
+		t.Fatalf("got %v", err)
+	}
+	if _, err := os.Stat(runs); err == nil {
+		t.Error("runs directory created")
+	}
+}
