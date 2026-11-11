@@ -81,10 +81,10 @@
 Отказы: 19 из 138 шагов (13%) в 10 из 17 прогонов
 
 ПРИЧИНА                        ВЫЗОВОВ  ПРОГОНОВ  ЧТО
-составная команда                    9         7  go vet ×6, sed -i ×6, gofmt ×4, python3 ×2, cat
+составная команда                    9         7  sed -i ×7, go vet ×6, gofmt ×4, python3 ×3
 переменная или цикл в команде        4         4
 инструмент отключён                  3         1  Edit ×3
-песочница запрещает запись           3         1  git status, go test, pwd
+песочница запрещает запись           3         1  go test ×2, git status
 ```
 
 Сценарии `claude baseline` и `claude skill` рядом (остальные строки таблицы — в полном выводе):
@@ -98,7 +98,7 @@ claude  skill             2     26        0          0
 Подсказка, которую печатает `denials --hints`:
 
 ```
-Run one command per call: do not chain `go vet`, `sed -i`, `gofmt`, `python3`, `cat` with other commands using && ; or | — the whole call is rejected when any part needs approval.
+Do not call `sed -i`, `go vet`, `gofmt`, `python3`: they need approval in this environment, and one such part gets a whole chained call rejected. Run one allowed command per call.
 Do not use shell loops or variables to handle several files in one call; read each file with the file-reading tool and run each command separately.
 The `Edit` tool is disabled in this environment: if the task cannot be done without it, say so and stop instead of trying the same change through the shell.
 The workspace is read-only in this environment: commands that write files, build caches or temporary directories fail, so report what you would change instead of retrying.
