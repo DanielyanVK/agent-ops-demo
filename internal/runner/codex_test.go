@@ -469,15 +469,17 @@ func TestCodexFailedTurnIsRecordedAndRedacted(t *testing.T) {
 func TestAgentsDoNotInheritTheEnvironment(t *testing.T) {
 	t.Setenv("AGENTOPS_TEST_SECRET", "hunter2-parent-shell")
 	t.Setenv("ANTHROPIC_API_KEY", "kept-for-the-agent")
+	t.Setenv("OPENAI_API_KEY", "other-providers-key")
+	t.Setenv("HTTPS_PROXY", "http://proxy.example:3128")
 	e := setupCodex(t, "none")
 	dir := t.TempDir()
 	claude := filepath.Join(dir, "claude")
 	codex := filepath.Join(dir, "codex")
 	os.WriteFile(claude, []byte(`#!/bin/bash
-printf '{"type":"result","subtype":"success","is_error":false,"result":"secret=[%s] key=[%s] tz=[%s]"}\n' "$AGENTOPS_TEST_SECRET" "$ANTHROPIC_API_KEY" "$TZ"
+printf '{"type":"result","subtype":"success","is_error":false,"result":"secret=[%s] key=[%s] other=[%s] proxy=[%s] tz=[%s]"}\n' "$AGENTOPS_TEST_SECRET" "$ANTHROPIC_API_KEY" "$OPENAI_API_KEY" "$HTTPS_PROXY" "$TZ"
 `), 0o755)
 	os.WriteFile(codex, []byte(`#!/bin/bash
-printf '{"type":"item.completed","item":{"id":"i","type":"command_execution","command":"env","aggregated_output":"secret=[%s] gocache=[%s]","exit_code":0,"status":"completed"}}\n' "$AGENTOPS_TEST_SECRET" "${GOCACHE:+set}"
+printf '{"type":"item.completed","item":{"id":"i","type":"command_execution","command":"env","aggregated_output":"secret=[%s] gocache=[%s] other=[%s] key=[%s] proxy=[%s]","exit_code":0,"status":"completed"}}\n' "$AGENTOPS_TEST_SECRET" "${GOCACHE:+set}" "$ANTHROPIC_API_KEY" "$OPENAI_API_KEY" "$HTTPS_PROXY"
 `), 0o755)
 	t.Setenv("AGENTOPS_CLAUDE_BIN", claude)
 	t.Setenv("AGENTOPS_CODEX_BIN", codex)
@@ -492,11 +494,14 @@ printf '{"type":"item.completed","item":{"id":"i","type":"command_execution","co
 		if strings.Contains(got, "hunter2") || !strings.Contains(got, "secret=[]") {
 			t.Errorf("%s inherited the parent environment:\n%s", agent, got)
 		}
-		if agent == "claude" && (!strings.Contains(got, "key=[kept-for-the-agent]") || !strings.Contains(got, "tz=[UTC]")) {
-			t.Errorf("allow-listed variables lost:\n%s", got)
+		if !strings.Contains(got, "proxy=[http://proxy.example:3128]") {
+			t.Errorf("%s lost the proxy:\n%s", agent, got)
 		}
-		if agent == "codex" && !strings.Contains(got, "gocache=[set]") {
-			t.Errorf("codex lost GOCACHE:\n%s", got)
+		if agent == "claude" && (!strings.Contains(got, "key=[kept-for-the-agent] other=[]") || !strings.Contains(got, "tz=[UTC]")) {
+			t.Errorf("claude: own key lost or the other provider's key leaked:\n%s", got)
+		}
+		if agent == "codex" && (!strings.Contains(got, "gocache=[set]") || !strings.Contains(got, "other=[] key=[other-providers-key]")) {
+			t.Errorf("codex: GOCACHE or own key lost, or the other provider's key leaked:\n%s", got)
 		}
 	}
 }
@@ -505,7 +510,7 @@ func TestAgentEnvIsTheAllowList(t *testing.T) {
 	t.Setenv("AGENTOPS_TEST_SECRET", "x")
 	t.Setenv("CODEX_HOME", "/h/.codex")
 	t.Setenv("LC_CTYPE", "")
-	env := strings.Join(agentEnv([]string{"TZ=UTC"}), "\n")
+	env := strings.Join(agents["codex"].env([]string{"TZ=UTC"}), "\n")
 	for _, want := range []string{"PATH=", "CODEX_HOME=/h/.codex", "LC_CTYPE=", "TZ=UTC"} {
 		if !strings.Contains(env, want) {
 			t.Errorf("env lacks %q:\n%s", want, env)
@@ -531,5 +536,24 @@ func TestCodexTimeoutLineIsParsed(t *testing.T) {
 	}
 	if r := load(t, e, id); r.StopReason != "timeout" || !r.ResultError {
 		t.Errorf("%+v", r)
+	}
+}
+
+func TestSanitizeCodexHidesEveryShapeOfASkillRead(t *testing.T) {
+	P := "~/.codex/skills/foo/SKILL.md"
+	for _, cmd := range []string{"cd /w && cat " + P, "command cat " + P, "/bin/cat " + P, "env cat " + P, "echo " + P + " | xargs cat",
+		"pwd\\ncat " + P, "bash -c 'cat " + P + "'", "python3 -c 'print(open(\\\"" + P + "\\\").read())'",
+		"cat ~/.codex/skills/.system/foo/SKILL.md", "Q=" + P + "; cat $Q"} {
+		line := `{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"` + cmd + `","aggregated_output":"BODY-OF-SKILL","exit_code":0,"status":"completed"}}`
+		got := sanitizeCodex(line)
+		if got == "" || strings.Contains(got, "BODY-OF-SKILL") {
+			t.Errorf("%s: %s", cmd, got)
+		}
+	}
+	for _, cmd := range []string{"ls ~/.codex/skills/*/SKILL.md", "find ~/.codex -name SKILL.md", "test -f " + P, "go test ./..."} {
+		line := `{"type":"item.completed","item":{"id":"a","type":"command_execution","command":"` + cmd + `","aggregated_output":"LISTING","exit_code":0,"status":"completed"}}`
+		if got := sanitizeCodex(line); !strings.Contains(got, "LISTING") {
+			t.Errorf("%s must stay readable: %s", cmd, got)
+		}
 	}
 }

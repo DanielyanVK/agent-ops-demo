@@ -196,7 +196,7 @@ func runAgent(ctx context.Context, ag agent, o Options, s Scrub, tracePath strin
 	defer cancel()
 	cmd := exec.CommandContext(actx, bin, args...)
 	cmd.Dir = s.Workdir
-	cmd.Env = agentEnv(env)
+	cmd.Env = ag.env(env)
 	// Its own process group: Ctrl-C reaches agentops only, and a cancel kills the
 	// agent together with the tools it started.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

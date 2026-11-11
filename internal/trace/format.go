@@ -28,6 +28,15 @@ func (s Step) Glyph() string {
 	return "✓"
 }
 
+// Label is the tool column of a step: a skill read is a Skill for both agents
+// (Codex reads it through the shell). The JSON tool field keeps the real tool.
+func (s Step) Label() string {
+	if s.Kind == "skill" {
+		return "Skill"
+	}
+	return s.Tool
+}
+
 // Text is what a step row shows: the name of a skill, MCP tool or subagent,
 // otherwise the one-line call.
 func (s Step) Text() string {

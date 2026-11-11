@@ -275,7 +275,7 @@ func (m Model) pmBlock() []string {
 	where := "Сбой не привязан к одному шагу"
 	if pm.FailedStep >= 1 && pm.FailedStep <= len(r.Steps) {
 		s := r.Steps[pm.FailedStep-1]
-		where = fmt.Sprintf("Причина на шаге %d: %s %s", s.N, oneLine(s.Tool), oneLine(s.Summary))
+		where = fmt.Sprintf("Причина на шаге %d: %s %s", s.N, oneLine(s.Label()), oneLine(s.Summary))
 	}
 	for _, p := range []string{where, "Причина: " + pm.Cause, "Что поправить: " + pm.Fix} {
 		lines = append(lines, strings.Split(ansi.Wrap(trace.Clean(p), w, ""), "\n")...)
@@ -321,7 +321,7 @@ func (m Model) stepRowLines(w int) []string {
 	}
 	toolW := 0
 	for _, s := range r.Steps {
-		toolW = max(toolW, min(lipgloss.Width(oneLine(s.Tool)), 10))
+		toolW = max(toolW, min(lipgloss.Width(oneLine(s.Label())), 10))
 	}
 	numW := len(fmt.Sprint(len(r.Steps)))
 	var lines []string
@@ -358,7 +358,7 @@ func (m Model) stepRowLines(w int) []string {
 			summary = ansi.Truncate(summary, max(0, room-lipgloss.Width(tags)-1), "") + "…"
 		}
 		summary += tags
-		mid := fit(oneLine(s.Tool), toolW) + "  " + summary
+		mid := fit(oneLine(s.Label()), toolW) + "  " + summary
 		lines = append(lines, row(w, m.focus == focusSteps && i == m.step, true, marker,
 			lead, g, st, mid, right))
 	}
@@ -378,7 +378,7 @@ func (m Model) stepLines(w int) []string {
 	case "✗":
 		status = "✗ ошибка"
 	}
-	lines := []string{"Инструмент: " + oneLine(s.Tool), "Статус: " + status, "Время: " + trace.FmtDuration(s.Duration), ""}
+	lines := []string{"Инструмент: " + oneLine(s.Label()), "Статус: " + status, "Время: " + trace.FmtDuration(s.Duration), ""}
 	section := func(title, body string) {
 		lines = append(lines, bold.Render(title))
 		if strings.TrimSpace(body) == "" {

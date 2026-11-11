@@ -268,7 +268,7 @@ func TestHeaderShowsAgentAndWhatTheRunUsed(t *testing.T) {
 			t.Errorf("codex run lacks %q:\n%s", want, out)
 		}
 	}
-	if !regexp.MustCompile(`Shell +systematic-debugging`).MatchString(out) {
+	if !regexp.MustCompile(`Skill +systematic-debugging`).MatchString(out) {
 		t.Errorf("a skill step shows the skill, not the command:\n%s", out)
 	}
 	if strings.Contains(out, "подагенты") {

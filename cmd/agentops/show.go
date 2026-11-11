@@ -73,7 +73,7 @@ func runShow(args []string, stdout io.Writer) error {
 		if *asJSON {
 			return printJSON(stdout, showStepOutput{run.ID, stepDetail{s.Brief(), in, out, len(s.Input), len(s.Output), inCut || outCut}})
 		}
-		title := fmt.Sprintf("Шаг %d · %s", s.N, s.Tool)
+		title := fmt.Sprintf("Шаг %d · %s", s.N, s.Label())
 		if s.IsError {
 			title += " · ошибка"
 		}
@@ -120,7 +120,7 @@ func runShow(args []string, stdout io.Writer) error {
 	oneLine := func(s string) string { return strings.ReplaceAll(trace.Clean(s), "\n", " ") }
 	numW, toolW := len(strconv.Itoa(len(run.Steps))), 0
 	for _, s := range run.Steps {
-		toolW = max(toolW, utf8.RuneCountInString(oneLine(s.Tool)))
+		toolW = max(toolW, utf8.RuneCountInString(oneLine(s.Label())))
 	}
 	for _, s := range run.Steps {
 		mark := s.Glyph()
@@ -131,7 +131,7 @@ func runShow(args []string, stdout io.Writer) error {
 		if run.CauseStep(s) {
 			tag += " ← разбор"
 		}
-		fmt.Fprintf(stdout, "%*d %s %s %s %6s%s\n", numW, s.N, mark, padRight(oneLine(s.Tool), toolW), padRight(oneLine(s.ShortText()), 60),
+		fmt.Fprintf(stdout, "%*d %s %s %s %6s%s\n", numW, s.N, mark, padRight(oneLine(s.Label()), toolW), padRight(oneLine(s.ShortText()), 60),
 			trace.FmtDuration(s.Duration), tag)
 	}
 	return nil

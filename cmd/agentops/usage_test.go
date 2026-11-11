@@ -123,3 +123,28 @@ func TestEmptyListsAreArraysNotNull(t *testing.T) {
 		t.Errorf("ls brief carries skills, not mcp: %s", out.String())
 	}
 }
+
+func TestSkillStepIsLabelledSkillForBothAgents(t *testing.T) {
+	runs := usageRuns(t)
+	var out bytes.Buffer
+	if err := runShow([]string{"--runs", runs, "run-02"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`(?m)^ *1 ✓ Skill +systematic-debugging`).MatchString(out.String()) || strings.Contains(out.String(), "Shell systematic") {
+		t.Errorf("row:\n%s", out.String())
+	}
+	out.Reset()
+	if err := runShow([]string{"--runs", runs, "run-02", "--step", "1"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Шаг 1 · Skill") {
+		t.Errorf("step title:\n%s", out.String())
+	}
+	out.Reset()
+	if err := runShow([]string{"--runs", runs, "run-02", "--json"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"tool":"Shell","kind":"skill","name":"systematic-debugging"`) {
+		t.Errorf("JSON tool must stay Shell: %s", out.String())
+	}
+}

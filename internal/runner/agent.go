@@ -19,13 +19,15 @@ type agent struct {
 	sanitize func(line []byte, s Scrub, now time.Time) []byte
 	// finished: the sanitized line is the agent's final report.
 	finished func(clean []byte) bool
+	// keys are the agent's own credentials and settings; the common list is added.
+	keys []string
 	// timeoutLine ends a trace of an agent that ran out of time.
 	timeoutLine func(elapsed time.Duration, now time.Time) string
 }
 
 var agents = map[string]agent{
 	"claude": {
-		name: "claude", binEnv: "AGENTOPS_CLAUDE_BIN",
+		name: "claude", binEnv: "AGENTOPS_CLAUDE_BIN", keys: []string{"ANTHROPIC_API_KEY"},
 		prepare: func(o Options, _ string) ([]string, []string, error) {
 			return agentArgs(o), []string{"TZ=UTC"}, nil // tool output such as `ls -la` prints local time
 		},
@@ -36,7 +38,7 @@ var agents = map[string]agent{
 		},
 	},
 	"codex": {
-		name: "codex", binEnv: "AGENTOPS_CODEX_BIN",
+		name: "codex", binEnv: "AGENTOPS_CODEX_BIN", keys: []string{"OPENAI_API_KEY", "CODEX_HOME"},
 		prepare:  codexPrepare,
 		sanitize: SanitizeCodex,
 		finished: func(clean []byte) bool { t := lineType(clean); return t == "turn.completed" || t == "turn.failed" },
@@ -103,15 +105,17 @@ func checkAgent(o Options) (agent, error) {
 	return a, nil
 }
 
-// agentEnvAllow is the whole environment an agent gets: it inherits nothing
-// else from agentops, so a variable of the parent shell cannot reach the trace.
+// agentEnvAllow is what every agent may inherit; each agent adds only its own
+// provider key (agent.keys). Nothing else from the parent shell reaches the trace.
+// A proxy and a certificate file are here because an agent behind a corporate
+// proxy cannot reach its model without them.
 var agentEnvAllow = []string{"PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "TERM",
-	"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_HOME"}
+	"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "SSL_CERT_FILE"}
 
 // agentEnv is the allow-listed part of the current environment plus extra.
-func agentEnv(extra []string) []string {
+func (a agent) env(extra []string) []string {
 	var env []string
-	for _, k := range agentEnvAllow {
+	for _, k := range append(slices.Clone(agentEnvAllow), a.keys...) {
 		if v, ok := os.LookupEnv(k); ok {
 			env = append(env, k+"="+v)
 		}
