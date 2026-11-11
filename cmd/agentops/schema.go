@@ -43,6 +43,7 @@ func runSchema(args []string, stdout io.Writer) error {
 // outputTypes: one $defs entry per command output.
 var outputTypes = map[string]reflect.Type{
 	"ls":        reflect.TypeFor[lsOutput](),
+	"denials":   reflect.TypeFor[denialsOutput](),
 	"show":      reflect.TypeFor[showOutput](),
 	"show_step": reflect.TypeFor[showStepOutput](),
 	"why":       reflect.TypeFor[whyOutput](),

@@ -63,3 +63,30 @@ type analyzeOutput struct {
 	Source  *string  `json:"source,omitempty" doc:"Who made the diagnosis; only when ok is true" enum:"rule,model"`
 	CostUSD *float64 `json:"cost_usd,omitempty" doc:"Cost of the diagnosis, USD; only when ok is true"`
 }
+
+type denialsOutput struct {
+	Runs            int                `json:"runs" doc:"Runs counted, after the --agent and --scenario filters"`
+	RunsWithDenials int                `json:"runs_with_denials" doc:"Runs with at least one blocked call"`
+	Steps           int                `json:"steps" doc:"Steps of the counted runs"`
+	Denied          int                `json:"denied" doc:"Blocked calls among those steps"`
+	Percent         int                `json:"percent" doc:"Blocked share of steps, integer percent; 0 without steps"`
+	Reasons         []denialReasonJSON `json:"reasons" doc:"Blocked calls by reason, most calls first"`
+	Groups          []denialGroupJSON  `json:"groups" doc:"Per agent and scenario, sorted by agent then scenario"`
+}
+
+type denialReasonJSON struct {
+	Class string            `json:"class" doc:"Reason class" enum:"compound,variable,disabled,approval,sandbox,other"`
+	Title string            `json:"title" doc:"Russian name of the class"`
+	Calls int               `json:"calls" doc:"Blocked calls of this class"`
+	Runs  int               `json:"runs" doc:"Runs with at least one such call"`
+	Items []trace.ToolCount `json:"items" doc:"Commands or tools behind the calls, most frequent first; [] when none"`
+	Hint  string            `json:"hint" doc:"English sentence for an agent's instructions; empty for other"`
+}
+
+type denialGroupJSON struct {
+	Agent    string `json:"agent" doc:"Agent of the runs"`
+	Scenario string `json:"scenario" doc:"Scenario of the runs"`
+	Runs     int    `json:"runs" doc:"Runs in the group"`
+	Steps    int    `json:"steps" doc:"Steps of those runs"`
+	Denied   int    `json:"denied" doc:"Blocked calls among those steps"`
+}

@@ -98,7 +98,9 @@ func noArgs(args []string) error {
 }
 
 func printJSON(w io.Writer, v any) error {
-	return json.NewEncoder(w).Encode(v)
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false) // hints carry "&&"; agents read this output as is
+	return enc.Encode(v)
 }
 
 func main() {

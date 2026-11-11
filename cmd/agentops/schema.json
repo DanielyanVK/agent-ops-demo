@@ -67,6 +67,146 @@
       ],
       "type": "object"
     },
+    "denials": {
+      "additionalProperties": false,
+      "properties": {
+        "denied": {
+          "description": "Blocked calls among those steps",
+          "type": "integer"
+        },
+        "groups": {
+          "description": "Per agent and scenario, sorted by agent then scenario",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "agent": {
+                "description": "Agent of the runs",
+                "type": "string"
+              },
+              "denied": {
+                "description": "Blocked calls among those steps",
+                "type": "integer"
+              },
+              "runs": {
+                "description": "Runs in the group",
+                "type": "integer"
+              },
+              "scenario": {
+                "description": "Scenario of the runs",
+                "type": "string"
+              },
+              "steps": {
+                "description": "Steps of those runs",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "agent",
+              "scenario",
+              "runs",
+              "steps",
+              "denied"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "percent": {
+          "description": "Blocked share of steps, integer percent; 0 without steps",
+          "type": "integer"
+        },
+        "reasons": {
+          "description": "Blocked calls by reason, most calls first",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "calls": {
+                "description": "Blocked calls of this class",
+                "type": "integer"
+              },
+              "class": {
+                "description": "Reason class",
+                "enum": [
+                  "compound",
+                  "variable",
+                  "disabled",
+                  "approval",
+                  "sandbox",
+                  "other"
+                ],
+                "type": "string"
+              },
+              "hint": {
+                "description": "English sentence for an agent's instructions; empty for other",
+                "type": "string"
+              },
+              "items": {
+                "description": "Commands or tools behind the calls, most frequent first; [] when none",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "n": {
+                      "description": "Number of calls",
+                      "type": "integer"
+                    },
+                    "tool": {
+                      "description": "Tool name",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "tool",
+                    "n"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "runs": {
+                "description": "Runs with at least one such call",
+                "type": "integer"
+              },
+              "title": {
+                "description": "Russian name of the class",
+                "type": "string"
+              }
+            },
+            "required": [
+              "class",
+              "title",
+              "calls",
+              "runs",
+              "items",
+              "hint"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "runs": {
+          "description": "Runs counted, after the --agent and --scenario filters",
+          "type": "integer"
+        },
+        "runs_with_denials": {
+          "description": "Runs with at least one blocked call",
+          "type": "integer"
+        },
+        "steps": {
+          "description": "Steps of the counted runs",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "runs",
+        "runs_with_denials",
+        "steps",
+        "denied",
+        "percent",
+        "reasons",
+        "groups"
+      ],
+      "type": "object"
+    },
     "ls": {
       "additionalProperties": false,
       "properties": {

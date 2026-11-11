@@ -70,7 +70,7 @@ func TestSchemaCommand(t *testing.T) {
 	if doc.ID != "agentops-output-v1" {
 		t.Errorf("$id = %q", doc.ID)
 	}
-	for _, name := range []string{"ls", "show", "show_step", "why", "check", "run", "analyze"} {
+	for _, name := range []string{"ls", "show", "show_step", "why", "check", "run", "analyze", "denials"} {
 		if _, ok := doc.Defs[name]; !ok {
 			t.Errorf("no $defs entry %q", name)
 		}
@@ -102,6 +102,7 @@ func TestJSONOutputMatchesTypes(t *testing.T) {
 	strict(t, "show", capture(runShow(append([]string{"run-02"}, runs...), &out)), &showOutput{})
 	strict(t, "show_step", capture(runShow(append([]string{"run-02", "--step", "3"}, runs...), &out)), &showStepOutput{})
 	strict(t, "why", capture(runWhy(append([]string{"run-02"}, runs...), &out)), &whyOutput{})
+	strict(t, "denials", capture(runDenials(runs, &out, os.Stderr)), &denialsOutput{})
 	strict(t, "check", capture(runCheck(append([]string{"--min", "10"}, runs...), &out, os.Stderr)), &checkResult{})
 
 	// analyze: a rule-only diagnosis on a copy, so no model is called and the fixtures stay untouched.
