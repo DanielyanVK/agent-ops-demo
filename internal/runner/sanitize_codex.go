@@ -134,6 +134,7 @@ func SanitizeCodex(line []byte, s Scrub, now time.Time) []byte {
 	}
 	var o obj
 	_ = json.Unmarshal(out, &o)
+	hideSkillInCodexOutput(o, s)
 	o["ts"] = json.RawMessage(`"` + now.UTC().Format(tsLayout) + `"`)
 	return scrub(marshal(o), s)
 }

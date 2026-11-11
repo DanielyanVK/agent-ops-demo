@@ -127,6 +127,10 @@ if [ "$MODE" = fixagents ]; then
   mkdir -p .agents
   printf 'package shop\nimport "testing"\nfunc TestZ(t *testing.T) { t.Fatal("x") }\n' > .agents/zz_test.go
 fi
+if [ "$MODE" = catskill ]; then
+  body=$(cat .agents/skills/go-test-fixer/* | awk 'BEGIN{ORS="\\n"}1')
+  printf '{"type":"item.completed","item":{"id":"item_9","type":"command_execution","command":"cat .agents/skills/go-test-fixer/*","aggregated_output":"%s","exit_code":0,"status":"completed"}}\n' "$body"
+fi
 echo "$@" > "$ARGS_OUT"
 [ -f .agents/skills/go-test-fixer/SKILL.md ] && echo SKILL_INSTALLED >> "$ARGS_OUT"
 echo "GOCACHE=$GOCACHE" >> "$ARGS_OUT"

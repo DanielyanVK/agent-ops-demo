@@ -108,6 +108,9 @@ func Run(ctx context.Context, o Options) (id string, err error) {
 
 	home, _ := os.UserHomeDir()
 	s := Scrub{Workdir: workdir, TempDir: filepath.Clean(os.TempDir()), Home: home, PluginDir: o.PluginDir, CodexHome: os.Getenv("CODEX_HOME")}
+	if o.Scenario.Skills {
+		s.SkillTexts = readSkillTexts(o.PluginDir)
+	}
 	if u, err := user.Current(); err == nil {
 		s.User, s.FullName = u.Username, u.Name
 	}

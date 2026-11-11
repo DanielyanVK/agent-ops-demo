@@ -33,7 +33,11 @@ var (
 // Scrub names what must not leave the machine: tool output can carry the
 // workdir, the temp directory (go build paths), the home directory, the login
 // and full name (an `ls -la` owner column, a git author) and the host name.
-type Scrub struct{ Workdir, TempDir, Home, User, FullName, Host, PluginDir, CodexHome string }
+type Scrub struct {
+	Workdir, TempDir, Home, User, FullName, Host, PluginDir, CodexHome string
+	// SkillTexts are the files of the skills given to the agent; their lines are removed from outputs.
+	SkillTexts []string
+}
 
 // Sanitize returns nil when the line must not be published.
 func Sanitize(line []byte, s Scrub) []byte {
@@ -41,7 +45,7 @@ func Sanitize(line []byte, s Scrub) []byte {
 	if out == nil {
 		return nil
 	}
-	return scrub(out, s)
+	return scrub(hideSkillInUser(out, s), s)
 }
 
 // scrub is shared by trace lines, the verdict's test output and the agent's stderr.
