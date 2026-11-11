@@ -355,11 +355,26 @@ func TestLeakcheckExtraPatterns(t *testing.T) {
 }
 
 func TestScrubRedactsCredentials(t *testing.T) {
-	in := "key sk-proj-abcDEF123_xyz and sk-*****abcd org-AbCdEfGh1234 req_AbCdEfGh1234 Authorization: Bearer abc.DEF-123_xyz short sk-1 req_12"
-	got := string(scrub([]byte(in), Scrub{}))
-	want := "key sk-… and sk-… org-… req_… Authorization: Bearer … short sk-1 req_12"
-	if got != want {
-		t.Errorf("got  %s\nwant %s", got, want)
+	for in, want := range map[string]string{
+		"key sk-proj-abcdefgh12345678 end":     "key sk-… end",
+		`{"m":"x\nsk-proj-abcdefgh12345678"}`:  `{"m":"x\nsk-…"}`,
+		`{"m":"\"sk-proj-abcdefgh12345678\""}`: `{"m":"\"sk-…\""}`,
+		"sk-ant-api03-abcdefghijklmnop":        "sk-…",
+		"sk-*****abcd":                         "sk-…",
+		"org-AbCdEfGh1234":                     "org-…",
+		"req_abcdef123456":                     "req_…",
+		"Bearer eyJhbGciOi.JIUzI1NiJ9.sig":     "Bearer …",
+		"bearer abcdefgh12345":                 "Bearer …",
+		"short sk-1 req_12 Bearer abc":         "short sk-1 req_12 Bearer abc",
+		"risk-assessment":                      "risk-assessment",
+		"task-management-service":              "task-management-service",
+		"reorg-anization-plan":                 "reorg-anization-plan",
+		"prereq_requirements":                  "prereq_requirements",
+		"Bearer authentication scheme":         "Bearer authentication scheme",
+	} {
+		if got := string(scrub([]byte(in), Scrub{})); got != want {
+			t.Errorf("%s\n got  %s\n want %s", in, got, want)
+		}
 	}
 }
 

@@ -80,12 +80,12 @@ func codexItem(r json.RawMessage) json.RawMessage {
 	return out
 }
 
-// hideSkillText replaces the output of a skill read: the text of a skill file
-// is somebody's content and is not published.
+// hideSkillText replaces the output of a command that may print a skill file:
+// the text of a skill is somebody's content and is not published.
 func hideSkillText(item json.RawMessage) json.RawMessage {
 	var m obj
 	var cmd string
-	if json.Unmarshal(item, &m) != nil || json.Unmarshal(m["command"], &cmd) != nil || len(trace.SkillReads(cmd)) == 0 {
+	if json.Unmarshal(item, &m) != nil || json.Unmarshal(m["command"], &cmd) != nil || !trace.MentionsSkillText(cmd) {
 		return item
 	}
 	m["aggregated_output"] = json.RawMessage(`"[текст навыка не сохраняется]"`)

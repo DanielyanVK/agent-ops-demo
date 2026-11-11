@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -42,43 +43,99 @@ type codexLine struct {
 }
 
 var (
-	shellWrapper = regexp.MustCompile(`^/bin/(?:zsh|bash|sh) -lc `)
-	skillPath    = regexp.MustCompile(`/skills/([^/\s'"]+)/SKILL\.md`)
-	segmentSplit = regexp.MustCompile(`&&|\|\||;|\|`)
+	shellWrapper = regexp.MustCompile(`^/bin/(?:zsh|bash|sh) -lc +`)
+	skillPath    = regexp.MustCompile(`/skills/(?:[^/\s'"]+/)*?([^/\s'"]+)/SKILL\.md`)
+	segmentSplit = regexp.MustCompile(`[;|&\n]`)
 	// quoteIdiom is how a shell script with single quotes inside double quotes
 	// is written: '"'text'"' stands for 'text'.
 	quoteIdiom = regexp.MustCompile(`'"'([^'"]*)'"'`)
 )
 
+// dqEscapes are the backslash escapes the shell removes inside double quotes.
+var dqEscapes = strings.NewReplacer(`\"`, `"`, `\\`, `\`, `\$`, "$", "\\`", "`")
+
 var skillReaders = []string{"cat", "sed", "head", "tail", "less", "bat", "nl", "awk", "rg", "grep"}
 
+// words splits a command segment and drops what runs the real command: a
+// leading command/env/time, variable assignments and the directory of the program.
+func words(seg string) []string {
+	f := strings.Fields(seg)
+	for len(f) > 0 && (f[0] == "command" || f[0] == "env" || f[0] == "time" || strings.Contains(f[0], "=") && !strings.HasPrefix(f[0], "-")) {
+		f = f[1:]
+	}
+	if len(f) > 0 {
+		f[0] = path.Base(f[0])
+	}
+	return f
+}
+
 // SkillReads returns the names of the skills a Codex shell command reads: a
-// segment of the command (split on && || ; |) must start with a reader and
-// name a path .../skills/<name>/SKILL.md that is not a redirect target. Writes,
-// listings, globs and tests of such a path are not reads. The sanitizer and the
-// parser both use it.
+// segment of the command (split on & && | || ; and newlines) must start with a
+// reader and name a path .../skills/<name>/SKILL.md that is a file argument:
+// not a redirect target, not the search pattern of grep or rg. Writes, listings,
+// globs and tests of such a path are not reads. The parser uses it to tell a
+// skill step from a shell step.
 func SkillReads(command string) []string {
 	var names []string
 	for _, seg := range segmentSplit.Split(unwrapShell(command), -1) {
-		f := strings.Fields(seg)
+		f := words(seg)
 		if len(f) == 0 || !slices.Contains(skillReaders, f[0]) {
 			continue
 		}
-		for _, m := range skillPath.FindAllStringSubmatchIndex(seg, -1) {
-			name := seg[m[2]:m[3]]
-			if strings.ContainsAny(name, "*?[<$") || redirected(seg[:m[0]]) || slices.Contains(names, name) {
+		for i, tok := range f {
+			if strings.Contains(tok, ">") || i > 0 && strings.HasSuffix(f[i-1], ">") {
 				continue
 			}
-			names = append(names, name)
+			for _, m := range skillPath.FindAllStringSubmatch(tok, -1) {
+				if strings.ContainsAny(m[1], "*?[<$") || slices.Contains(names, m[1]) || searchPattern(f, i) {
+					continue
+				}
+				names = append(names, m[1])
+			}
 		}
 	}
 	return names
 }
 
-// redirected: the path token that ends the prefix is the target of a > or >> redirect.
-func redirected(prefix string) bool {
-	start := strings.LastIndexAny(prefix, " \t") + 1
-	return strings.Contains(prefix[start:], ">") || strings.HasSuffix(strings.TrimRight(prefix[:start], " \t"), ">")
+// searchPattern: for grep and rg the first non-option argument is the pattern,
+// so a skill path followed by another argument is a pattern, not a file.
+func searchPattern(f []string, i int) bool {
+	if f[0] != "grep" && f[0] != "rg" {
+		return false
+	}
+	for _, t := range f[i+1:] {
+		if !strings.HasPrefix(t, "-") {
+			return true
+		}
+	}
+	return false
+}
+
+// cannotPrint are the commands that cannot show the contents of a file.
+var cannotPrint = []string{"ls", "find", "test", "[", "echo", "rm", "stat", "printf", "wc"}
+
+// MentionsSkillText reports whether the output of a command may contain the
+// text of a skill file. It fails closed: any command that names SKILL.md is
+// suspect unless each segment naming it starts with a command that cannot print
+// file contents. Indirection (xargs, command substitution, -exec) is suspect too.
+func MentionsSkillText(command string) bool {
+	if !strings.Contains(command, "SKILL.md") {
+		return false
+	}
+	script := unwrapShell(command)
+	if strings.Contains(script, "$(") || strings.Contains(script, "`") {
+		return true
+	}
+	for _, seg := range segmentSplit.Split(script, -1) {
+		f := words(seg)
+		if len(f) > 0 && (f[0] == "xargs" || slices.Contains(f, "-exec")) {
+			return true
+		}
+		if strings.Contains(seg, "SKILL.md") && (len(f) == 0 || !slices.Contains(cannotPrint, f[0])) {
+			return true
+		}
+	}
+	return false
 }
 
 // ParseCodex reads `codex exec --json` lines as the runner records them (with
@@ -210,6 +267,7 @@ func unwrapShell(cmd string) string {
 		if strings.Contains(strings.ReplaceAll(inner, `\"`, ""), `"`) {
 			return rest // not one plain double-quoted string
 		}
+		inner = dqEscapes.Replace(inner)
 	} else if strings.Contains(inner, "'") {
 		return rest
 	}

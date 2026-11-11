@@ -68,7 +68,12 @@ func scrub(b []byte, s Scrub) []byte {
 	}
 	replace(s.Home, "~")
 	for _, r := range secretRes {
-		b = r.re.ReplaceAll(b, []byte(r.to))
+		b = r.re.ReplaceAllFunc(b, func(m []byte) []byte {
+			if secretLike.Match(m[len(r.prefix):]) {
+				return []byte(r.to)
+			}
+			return m
+		})
 	}
 	short, _, _ := strings.Cut(s.Host, ".")
 	names := [][2]string{{s.Host, "host"}, {short, "host"}, {s.FullName, "user"}, {s.User, "user"}}
@@ -83,15 +88,21 @@ func scrub(b []byte, s Scrub) []byte {
 }
 
 // secretRes redact credentials that a tool output or an error message may echo.
+// A match is replaced only when the part after the prefix looks like a secret
+// (a digit, "*", "." or an uppercase letter), so that "risk-assessment" or
+// "Bearer authentication scheme" survive.
 var secretRes = []struct {
-	re *regexp.Regexp
-	to string
+	re     *regexp.Regexp
+	prefix string
+	to     string
 }{
-	{regexp.MustCompile(`sk-[A-Za-z0-9_*-]{8,}`), "sk-…"},
-	{regexp.MustCompile(`org-[A-Za-z0-9]{8,}`), "org-…"},
-	{regexp.MustCompile(`req_[A-Za-z0-9]{8,}`), "req_…"},
-	{regexp.MustCompile(`Bearer [A-Za-z0-9._-]{8,}`), "Bearer …"},
+	{regexp.MustCompile(`sk-[A-Za-z0-9_*-]{8,}`), "sk-", "sk-…"},
+	{regexp.MustCompile(`org-[A-Za-z0-9]{8,}`), "org-", "org-…"},
+	{regexp.MustCompile(`req_[A-Za-z0-9]{8,}`), "req_", "req_…"},
+	{regexp.MustCompile(`(?i)Bearer [A-Za-z0-9._-]{8,}`), "Bearer ", "Bearer …"},
 }
+
+var secretLike = regexp.MustCompile(`[0-9*.A-Z]`)
 
 // pathEnd are the characters that end a path in a serialized line or a shell
 // command, so the text after it survives.

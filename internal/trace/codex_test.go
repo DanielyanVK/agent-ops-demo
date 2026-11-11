@@ -211,8 +211,11 @@ func TestUnwrapShell(t *testing.T) {
 		`/bin/zsh -lc "sed -n '1,240p' cart.go; sed -n '1,240p' stats.go; sed -n '1,240p' text.go"`: `sed -n '1,240p' cart.go; sed -n '1,240p' stats.go; sed -n '1,240p' text.go`,
 		`/bin/zsh -lc "pwd && rg --files -g '"'!*_test.go'"' -g '"'!vendor'"' | sed -n '1,200p'"`:   `pwd && rg --files -g '!*_test.go' -g '!vendor' | sed -n '1,200p'`,
 		`/bin/zsh -lc 'gofmt -w calc.go && go test ./...'`:                                          `gofmt -w calc.go && go test ./...`,
-		`/bin/sh -lc ls`: `ls`,
-		`ls -la`:         `ls -la`, // no wrapper
+		`/bin/sh -lc ls`:                 `ls`,
+		`/bin/zsh -lc   "ls -la"`:        `ls -la`,
+		`/bin/zsh -lc "echo \"hi\""`:     `echo "hi"`,
+		`/bin/zsh -lc "echo \$HOME \\n"`: `echo $HOME \n`,
+		`ls -la`:                         `ls -la`, // no wrapper
 		// Not one plain quoted string: left with its quotes.
 		`/bin/zsh -lc "echo "a" && echo "b""`: `"echo "a" && echo "b""`,
 		`/bin/zsh -lc 'echo '\''x'\'''`:       `'echo '\''x'\'''`,
@@ -240,5 +243,55 @@ func TestParseCodexSkipsLinesOfTheWrongShape(t *testing.T) {
 	r, err := ParseCodex(strings.NewReader(in))
 	if err != nil || len(r.Steps) != 1 || r.Steps[0].Line != "pwd" || r.TokensIn != 7 || r.Turns != 1 {
 		t.Errorf("%+v, %v", r, err)
+	}
+}
+
+func TestSkillReadsLessBrittle(t *testing.T) {
+	P := "~/.codex/skills/foo/SKILL.md"
+	for cmd, want := range map[string][]string{
+		"/bin/cat " + P:                            {"foo"},
+		"command cat " + P:                         {"foo"},
+		"env FOO=1 cat " + P:                       {"foo"},
+		"time sed -n 1,5p " + P:                    {"foo"},
+		"cd /w & cat " + P:                         {"foo"},
+		"pwd\ncat " + P:                            {"foo"},
+		"cat ~/.codex/skills/.system/bar/SKILL.md": {"bar"},
+		"rg name " + P:                             {"foo"},
+		"rg -n " + P + " other.md":                 nil, // the path is the search pattern
+		"grep SKILL " + P:                          {"foo"},
+		"grep -r " + P + " .":                      nil,
+		"echo " + P + " | xargs cat":               nil, // not precise; the sanitizer covers it
+	} {
+		if got := SkillReads(cmd); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: got %v, want %v", cmd, got, want)
+		}
+	}
+}
+
+func TestMentionsSkillText(t *testing.T) {
+	P := "~/.codex/skills/foo/SKILL.md"
+	hidden := []string{
+		"cat " + P, "cd /w && cat " + P, "command cat " + P, "/bin/cat " + P, "env cat " + P,
+		"echo " + P + " | xargs cat", "pwd\ncat " + P, "bash -c 'cat " + P + "'",
+		"python3 -c 'print(open(\"" + P + "\").read())'", "cat ~/.codex/skills/.system/foo/SKILL.md",
+		"P=" + P + "; cat $P", "cat $(ls " + P + ")", "find ~/.codex -name SKILL.md -exec cat {} +",
+		"sed -n 1,5p " + P, "/bin/zsh -lc 'echo '\\''x'\\'' && cat " + P + "'", // unknown shape: fail closed
+	}
+	for _, c := range hidden {
+		if !MentionsSkillText(c) {
+			t.Errorf("must be hidden: %s", c)
+		}
+		if !MentionsSkillText(`/bin/zsh -lc "`+c+`"`) && !strings.Contains(c, `"`) {
+			t.Errorf("must be hidden in a wrapper: %s", c)
+		}
+	}
+	for _, c := range []string{
+		"ls ~/.codex/skills/*/SKILL.md", `/bin/zsh -lc "ls ~/.codex/skills/*/SKILL.md"`, "find ~/.codex -name SKILL.md",
+		"test -f " + P + " && echo yes", "[ -f " + P + " ]", "echo " + P, "rm " + P, "stat " + P, "printf '%s' " + P, "wc -l " + P,
+		"cd /w && ls " + P, "go test ./...", "cat calc.go",
+	} {
+		if MentionsSkillText(c) {
+			t.Errorf("must stay readable: %s", c)
+		}
 	}
 }
