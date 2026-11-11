@@ -1,0 +1,13 @@
+{
+  "id": "run-02",
+  "task": "fix-tests",
+  "agent": "claude",
+  "model": "haiku",
+  "scenario": "no-edit",
+  "prompt": "The tests in this Go module fail. Find the bugs and fix them so that \"go test ./...\" passes. Do not modify the test files.",
+  "started_at": "2026-11-11T11:04:09Z",
+  "verdict": {
+    "passed": false,
+    "test_output": "--- FAIL: TestTotal (0.00s)\n    cart_test.go:11: 10% discount: got 1430, want 1170\n--- FAIL: TestMean (0.00s)\n    stats_test.go:7: Mean([1 2]) = 1, want 1.5\n--- FAIL: TestTruncate (0.00s)\n    text_test.go:23: Truncate(\"привет мир\", 6) = \"пр\\xd0…\", want \"приве…\"\nFAIL\nFAIL\ttestbed\t0.330s\nFAIL\n"
+  }
+}

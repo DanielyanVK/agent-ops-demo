@@ -1,0 +1,1 @@
+{"id":"run-02","task":"fix-tests","agent":"claude","model":"haiku","scenario":"no-edit","prompt":"The tests in this Go module fail. Find the bugs and fix them so that \"go test ./...\" passes. Do not modify the test files.","started_at":"2026-11-11T10:10:00Z","verdict":{"passed":false,"test_output":"--- FAIL: TestMean (0.00s)\nFAIL"}}

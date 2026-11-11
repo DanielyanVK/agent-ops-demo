@@ -1,0 +1,11 @@
+{"type":"system","subtype":"init","model":"claude-haiku-5-5"}
+{"type":"assistant","timestamp":"2026-11-11T10:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Reading."},{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/work/stats.go"}}]}}
+{"type":"user","timestamp":"2026-11-11T10:00:01.200Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"package shop"}]}}
+
+{"type":"assistant","timestamp":"2026-11-11T10:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"go test ./...\necho done"}}]}}
+{"type":"user","timestamp":"2026-11-11T10:00:04.500Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"--- FAIL: TestMean (0.00s)","is_error":false}]}}
+{"type":"assistant","timestamp":"2026-11-11T10:00:05.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Edit","input":{"file_path":"/work/stats.go","old_string":"a","new_string":"b"}}]}}
+{"type":"user","timestamp":"2026-11-11T10:00:05.100Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t3","content":"edited"}]}}
+{"type":"assistant","timestamp":"2026-11-11T10:00:06.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t4","name":"Bash","input":{"command":"go test ./..."}}]}}
+{"type":"user","timestamp":"2026-11-11T10:00:09.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t4","content":"ok  \tshop\t0.003s"}]}}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":12000,"num_turns":5,"result":"Fixed the bug.","total_cost_usd":0.05,"permission_denials":[]}
