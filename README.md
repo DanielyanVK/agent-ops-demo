@@ -56,7 +56,7 @@ docker run --rm -it agentops
 
 1. `docker run --rm agentops ls` печатает сводку и таблицу; ищите ✗ и столбец СЦЕНАРИЙ.
 2. `docker run --rm agentops why run-06` отвечает на «почему»: шаг, причина, что поправить.
-3. `docker run --rm agentops show run-06` показывает все шаги; строка со стрелкой `← разбор` — причина, `⊘` — заблокированные вызовы. Один шаг целиком: `show run-06 --step 5`. Во второй строке заголовка видно, что агент использовал: токены, навыки, MCP, подагенты, веб-вызовы, например `21с · $0.0042 · 13 шагов · остановка: success · токены: 179088 → 2085 · навыки: agentops-demo:go-test-fixer` (`show run-11`). В JSON это `tokens_in`, `tokens_out`, `skills` (в `show` ещё `mcp`, `subagents`, `web_calls`).
+3. `docker run --rm agentops show run-06` показывает все шаги; строка со стрелкой `← разбор` — причина, `⊘` — заблокированные вызовы. Один шаг целиком: `show run-06 --step 5`. Во второй строке заголовка видно, что агент использовал: токены, навыки, MCP, подагенты, веб-вызовы, например `18с · $0.0039 · 13 шагов · остановка: success · токены: 139400 → 2269 · навыки: agentops-demo:go-test-fixer` (`show run-11`). В JSON это `tokens_in`, `tokens_out`, `skills` (в `show` ещё `mcp`, `subagents`, `web_calls`).
 4. `docker run --rm agentops check; echo $?` — гейт для CI: доля успешных против порога (`--min`, по умолчанию 80%); на этих данных «успешных 11 из 17 (64%) · порог 80% · ниже порога» и код 1.
 
 ## Использование агентом
@@ -74,7 +74,7 @@ docker run --rm -it agentops
 
 ## Записать свои прогоны
 
-`scripts/record.sh` записывает шестнадцать прогонов: десять Claude по сценариям `baseline`, `no-edit`, `few-turns`, `one-turn`, `bad-task`, два Claude со сценарием `skill` и четыре Codex (`baseline` ×2, `no-edit`, `skill`); затем разбирает упавшие и запускает проверку утечек. Один прогон: `./agentops run --scenario one-turn`.
+`scripts/record.sh` записывает семнадцать прогонов: десять Claude по сценариям `baseline`, `no-edit`, `few-turns`, `one-turn`, `bad-task`, два Claude со сценарием `skill` и пять Codex (`baseline` ×2, `no-edit`, `skill`, `bad-task`); затем разбирает упавшие и запускает проверку утечек. Один прогон: `./agentops run --scenario one-turn`.
 
 Агент выбирается флагом `--agent claude|codex` (по умолчанию `claude`): `./agentops run --agent codex --scenario baseline`. Сценарий `skill` даёт агенту навык из каталога `plugin/` (флаг `--plugin`, по умолчанию `plugin`): `./agentops run --scenario skill`. Codex не поддерживает `few-turns` и `one-turn`: у него нет лимита ходов.
 
