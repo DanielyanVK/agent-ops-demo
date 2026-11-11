@@ -46,6 +46,7 @@ func runShow(args []string, stdout io.Writer) error {
 	flags := flag.NewFlagSet("show", flag.ContinueOnError)
 	runsDir := runsFlag(flags)
 	step := flags.Int("step", 0, "показать один шаг целиком")
+	maxBytes := flags.Int("max-bytes", 4000, "предел размера входа и выхода шага в байтах, 0 — без предела")
 	asJSON := jsonFlag(flags)
 	ids, err := parseFlags(flags, args, stdout)
 	if err != nil {
@@ -53,6 +54,9 @@ func runShow(args []string, stdout io.Writer) error {
 	}
 	if len(ids) != 1 {
 		return errors.New("нужен ровно один id прогона")
+	}
+	if *maxBytes < 0 {
+		return errors.New("--max-bytes не может быть отрицательным")
 	}
 	run, err := loadRun(*runsDir, ids[0])
 	if err != nil {
@@ -64,15 +68,21 @@ func runShow(args []string, stdout io.Writer) error {
 			return fmt.Errorf("шага %d нет: в прогоне %s шагов %d", *step, run.ID, len(run.Steps))
 		}
 		s := run.Steps[*step-1]
+		in, inCut := truncateText(s.Input, *maxBytes)
+		out, outCut := truncateText(s.Output, *maxBytes)
 		if *asJSON {
-			return printJSON(stdout, showStepOutput{run.ID, stepDetail{s.Brief(), s.Input, s.Output}})
+			return printJSON(stdout, showStepOutput{run.ID, stepDetail{s.Brief(), in, out, len(s.Input), len(s.Output), inCut || outCut}})
 		}
 		title := fmt.Sprintf("Шаг %d · %s", s.N, s.Tool)
 		if s.IsError {
 			title += " · ошибка"
 		}
+		text := fmt.Sprintf("%s\n\n%s\n\nВХОД\n%s\n\nВЫХОД\n%s\n", runHeader(run), title, in, out)
+		if inCut || outCut {
+			text += fmt.Sprintf("обрезано: вход %d Б, выход %d Б полностью; --max-bytes 0 покажет целиком\n", len(s.Input), len(s.Output))
+		}
 		// Input and output are agent-controlled: an escape sequence must not reach the terminal.
-		fmt.Fprint(stdout, trace.Clean(fmt.Sprintf("%s\n\n%s\n\nВХОД\n%s\n\nВЫХОД\n%s\n", runHeader(run), title, s.Input, s.Output)))
+		fmt.Fprint(stdout, trace.Clean(text))
 		return nil
 	}
 
@@ -117,6 +127,22 @@ func runShow(args []string, stdout io.Writer) error {
 			trace.FmtDuration(s.Duration), tag)
 	}
 	return nil
+}
+
+// truncateText keeps the first and last limit/2 bytes (errors are usually at the
+// end), cut on rune boundaries, and says how many bytes were dropped. limit 0 means no limit.
+func truncateText(s string, limit int) (string, bool) {
+	if limit == 0 || len(s) <= limit {
+		return s, false
+	}
+	head, tail := limit/2, len(s)-limit/2
+	for head > 0 && !utf8.RuneStart(s[head]) {
+		head--
+	}
+	for tail < len(s) && !utf8.RuneStart(s[tail]) {
+		tail++
+	}
+	return fmt.Sprintf("%s\n… [обрезано %d байт] …\n%s", s[:head], tail-head, s[tail:]), true
 }
 
 func runHeader(r trace.Run) string {

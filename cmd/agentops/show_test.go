@@ -217,3 +217,113 @@ func TestShowAndWhyCleanAgentText(t *testing.T) {
 		t.Errorf("visible text lost:\n%s\n%s", show.String(), why.String())
 	}
 }
+
+func TestTruncateText(t *testing.T) {
+	if got, cut := truncateText("short", 10); got != "short" || cut {
+		t.Errorf("under the limit: %q %v", got, cut)
+	}
+	if got, cut := truncateText("0123456789"+strings.Repeat("x", 100), 0); len(got) != 110 || cut {
+		t.Errorf("no limit: %q %v", got, cut)
+	}
+
+	long := "HEAD" + strings.Repeat("x", 100) + "TAIL"
+	got, cut := truncateText(long, 20)
+	if !cut || !strings.HasPrefix(got, "HEADxxxxxx\n") || !strings.HasSuffix(got, "\nxxxxxxTAIL") ||
+		!strings.Contains(got, "\n… [обрезано 88 байт] …\n") {
+		t.Errorf("cut text: %q", got)
+	}
+
+	// Each Cyrillic letter is 2 bytes: both cuts at an odd offset land inside a rune.
+	cyr := strings.Repeat("я", 50)
+	got, cut = truncateText(cyr, 11)
+	if !cut || !utf8.ValidString(got) {
+		t.Fatalf("cyrillic: %q", got)
+	}
+	head, rest, _ := strings.Cut(got, "\n… [обрезано ")
+	n, tail, _ := strings.Cut(rest, " байт] …\n")
+	if head != strings.Repeat("я", 2) || tail != strings.Repeat("я", 2) || n != "92" {
+		t.Errorf("cyrillic head %q tail %q n %s", head, tail, n)
+	}
+}
+
+func bigStepRuns(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.CopyFS(filepath.Join(dir, "run-01"), os.DirFS(filepath.Join(fixtureRuns, "run-01"))); err != nil {
+		t.Fatal(err)
+	}
+	tr := filepath.Join(dir, "run-01", "trace.jsonl")
+	raw, err := os.ReadFile(tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Grow the output of the failing test step: "--- FAIL: TestMean" becomes 1000 bytes of Cyrillic between markers.
+	big := "НАЧАЛО" + strings.Repeat("ж", 500) + "КОНЕЦ"
+	changed := strings.Replace(string(raw), "--- FAIL: TestMean (0.00s)", big, 1)
+	if changed == string(raw) {
+		t.Fatal("fixture marker not found")
+	}
+	if err := os.WriteFile(tr, []byte(changed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestShowStepMaxBytes(t *testing.T) {
+	dir := bigStepRuns(t)
+	full := len("НАЧАЛО") + 1000 + len("КОНЕЦ")
+
+	type stepOut struct {
+		Step struct {
+			Output      string `json:"output"`
+			OutputBytes int    `json:"output_bytes"`
+			InputBytes  int    `json:"input_bytes"`
+			Truncated   bool   `json:"truncated"`
+		} `json:"step"`
+	}
+	show := func(args ...string) (string, stepOut) {
+		t.Helper()
+		var out bytes.Buffer
+		if err := runShow(append([]string{"--runs", dir}, args...), &out); err != nil {
+			t.Fatal(err)
+		}
+		var o stepOut
+		if strings.Contains(strings.Join(args, " "), "--json") {
+			if err := json.Unmarshal(out.Bytes(), &o); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return out.String(), o
+	}
+
+	// default cap: this output is under 4000 bytes, nothing is cut
+	if _, o := show("run-01", "--step", "2", "--json"); o.Step.Truncated || o.Step.OutputBytes != full || len(o.Step.Output) != full {
+		t.Errorf("default: %+v", o.Step)
+	}
+
+	// flags after the id, cut in the middle of a Cyrillic letter
+	_, o := show("run-01", "--step", "2", "--max-bytes", "101", "--json")
+	s := o.Step
+	if !s.Truncated || s.OutputBytes != full || s.InputBytes == 0 || !utf8.ValidString(s.Output) ||
+		!strings.HasPrefix(s.Output, "НАЧАЛО") || !strings.HasSuffix(s.Output, "КОНЕЦ") ||
+		!strings.Contains(s.Output, fmt.Sprintf("[обрезано %d байт]", full-func() int {
+			head, tail, _ := strings.Cut(s.Output, "\n… [обрезано ")
+			_, tail, _ = strings.Cut(tail, " байт] …\n")
+			return len(head) + len(tail)
+		}())) {
+		t.Errorf("cut: %+v", s)
+	}
+
+	text, _ := show("run-01", "--step", "2", "--max-bytes", "101")
+	if !strings.Contains(text, "… [обрезано ") ||
+		!strings.HasSuffix(text, fmt.Sprintf("обрезано: вход %d Б, выход %d Б полностью; --max-bytes 0 покажет целиком\n", s.InputBytes, full)) {
+		t.Errorf("human:\n%s", text)
+	}
+
+	if _, o := show("run-01", "--step", "2", "--max-bytes", "0", "--json"); o.Step.Truncated || len(o.Step.Output) != full {
+		t.Errorf("no limit: %+v", o.Step)
+	}
+	if text, _ := show("run-01", "--step", "2", "--max-bytes", "0"); strings.Contains(text, "обрезано") {
+		t.Errorf("no limit human:\n%s", text)
+	}
+}

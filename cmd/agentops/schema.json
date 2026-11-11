@@ -359,6 +359,10 @@
               "description": "Tool input as indented JSON; cut to --max-bytes",
               "type": "string"
             },
+            "input_bytes": {
+              "description": "Full size of the input in bytes, before any cut",
+              "type": "integer"
+            },
             "n": {
               "description": "Step number, starting at 1",
               "type": "integer"
@@ -367,6 +371,10 @@
               "description": "Tool result as text; cut to --max-bytes",
               "type": "string"
             },
+            "output_bytes": {
+              "description": "Full size of the output in bytes, before any cut",
+              "type": "integer"
+            },
             "summary": {
               "description": "One-line summary of the call",
               "type": "string"
@@ -374,6 +382,10 @@
             "tool": {
               "description": "Tool the agent called: Read, Edit, Bash, ...",
               "type": "string"
+            },
+            "truncated": {
+              "description": "The input or the output was cut; see --max-bytes",
+              "type": "boolean"
             }
           },
           "required": [
@@ -384,7 +396,10 @@
             "denied",
             "duration_ms",
             "input",
-            "output"
+            "output",
+            "input_bytes",
+            "output_bytes",
+            "truncated"
           ],
           "type": "object"
         }

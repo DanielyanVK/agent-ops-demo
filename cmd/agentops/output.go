@@ -19,8 +19,11 @@ type showOutput struct {
 
 type stepDetail struct {
 	trace.StepBrief
-	Input  string `json:"input" doc:"Tool input as indented JSON; cut to --max-bytes"`
-	Output string `json:"output" doc:"Tool result as text; cut to --max-bytes"`
+	Input       string `json:"input" doc:"Tool input as indented JSON; cut to --max-bytes"`
+	Output      string `json:"output" doc:"Tool result as text; cut to --max-bytes"`
+	InputBytes  int    `json:"input_bytes" doc:"Full size of the input in bytes, before any cut"`
+	OutputBytes int    `json:"output_bytes" doc:"Full size of the output in bytes, before any cut"`
+	Truncated   bool   `json:"truncated" doc:"The input or the output was cut; see --max-bytes"`
 }
 
 type showStepOutput struct {
