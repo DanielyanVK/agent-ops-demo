@@ -16,6 +16,11 @@
 
 ## Установка
 
+```
+git clone https://github.com/DanielyanVK/agent-ops-demo.git
+cd agent-ops-demo
+```
+
 Docker:
 
 ```
