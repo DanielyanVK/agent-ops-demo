@@ -18,7 +18,6 @@
 
 ```
 git clone https://github.com/DanielyanVK/agent-ops-demo.git
-cd agent-ops-demo
 ```
 
 Docker:
@@ -38,6 +37,8 @@ go build -o agentops ./cmd/agentops
 Чтобы смотреть записанные прогоны (они лежат в `runs/`), больше ничего не нужно. Чтобы записывать свои, нужны CLI `claude` с выполненным входом и Go.
 
 ## Просмотр через TUI
+
+![TUI: список прогонов слева, шаги выбранного прогона справа](docs/tui.png)
 
 ```
 docker run --rm -it agentops
