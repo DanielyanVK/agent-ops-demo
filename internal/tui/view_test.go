@@ -1,9 +1,13 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
@@ -29,7 +33,7 @@ func TestViewShowsSummaryRunsStepsAndPostmortem(t *testing.T) {
 
 	m = press(m, "j")
 	out = plain(m)
-	for _, want := range []string{"run-02 · ✗ провал · haiku · no-edit · fix-tests", "stats.go · запрещено", "РАЗБОР · правило", "Причина на шаге 3", "Причина: Агенту запрещено менять файлы", "Что поправить: Разрешить агенту Edit", "✗ провал"} {
+	for _, want := range []string{"run-02 · ✗ провал · claude · haiku · no-edit · fix-tests", "stats.go · запрещено", "РАЗБОР · правило", "Причина на шаге 3", "Причина: Агенту запрещено менять файлы", "Что поправить: Разрешить агенту Edit", "✗ провал"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("run-02 lacks %q:\n%s", want, out)
 		}
@@ -223,5 +227,69 @@ func TestStepTagsAndGlyphs(t *testing.T) {
 				t.Errorf("%v line %d width %d", size, i, w)
 			}
 		}
+	}
+}
+
+func usageRoot(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	for id, f := range map[string]string{"run-01": "claude-tools.jsonl", "run-02": "codex-tools.jsonl"} {
+		agent := "claude"
+		if id == "run-02" {
+			agent = "codex"
+		}
+		b, err := os.ReadFile("../trace/testdata/" + f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dir := filepath.Join(root, id)
+		os.MkdirAll(dir, 0o755)
+		meta := `{"id":"` + id + `","task":"fix-tests","agent":"` + agent + `","model":"default","scenario":"skill","verdict":{"passed":true,"test_output":""}}`
+		os.WriteFile(filepath.Join(dir, "meta.json"), []byte(meta), 0o644)
+		os.WriteFile(filepath.Join(dir, "trace.jsonl"), b, 0o644)
+	}
+	return root
+}
+
+func TestHeaderShowsAgentAndWhatTheRunUsed(t *testing.T) {
+	m := sized(New(usageRoot(t)), 140, 30)
+	out := plain(m)
+	for _, want := range []string{"run-01 · ✓ успех · claude · default · skill · fix-tests",
+		"навыки: go-test-fixer, other · MCP: notion.search ×2, notion.fetch__page · подагенты: 2 · веб: 2", "Skill       go-test-fixer"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("claude run lacks %q:\n%s", want, out)
+		}
+	}
+	m = press(m, "j")
+	out = plain(m)
+	for _, want := range []string{"run-02 · ✓ успех · codex · default · skill · fix-tests",
+		"навыки: systematic-debugging, go-test-fixer, other · MCP: notion.search ×2, notion.fetch · веб: 1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("codex run lacks %q:\n%s", want, out)
+		}
+	}
+	if !regexp.MustCompile(`Shell +systematic-debugging`).MatchString(out) {
+		t.Errorf("a skill step shows the skill, not the command:\n%s", out)
+	}
+	if strings.Contains(out, "подагенты") {
+		t.Errorf("zero subagents must not be shown:\n%s", out)
+	}
+}
+
+func TestNoUsageLineWhenNothingWasUsed(t *testing.T) {
+	m := sized(New(fixtures), 100, 30)
+	if strings.Contains(plain(m), "навыки") || m.usageLine() != "" {
+		t.Error("run-01 used nothing")
+	}
+}
+
+func TestClickOnStepRowWithUsageLine(t *testing.T) {
+	m := sized(New(usageRoot(t)), 140, 30)
+	if m.usageLine() == "" {
+		t.Fatal("fixture must have a usage line")
+	}
+	m = send(m, tea.MouseClickMsg{X: 60, Y: bodyTop + paneHead + m.pmHeight() + 2, Button: tea.MouseLeft})
+	if m.focus != focusSteps || m.step != 2 {
+		t.Fatalf("click on a step row: focus %v step %d", m.focus, m.step)
 	}
 }

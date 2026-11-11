@@ -9,14 +9,19 @@ type RunBrief struct {
 	Scenario   string      `json:"scenario" doc:"Recording scenario, e.g. baseline or no-edit"`
 	Steps      int         `json:"steps" doc:"Number of tool calls in the run"`
 	DurationMS int64       `json:"duration_ms" doc:"Run duration in milliseconds"`
-	CostUSD    float64     `json:"cost_usd" doc:"What the agent run cost, USD"`
-	StopReason string      `json:"stop_reason" doc:"How the agent stopped: success, error_max_turns, timeout, incomplete"`
+	CostUSD    float64     `json:"cost_usd" doc:"What the agent run cost, USD; 0 when the agent reports tokens only (codex)"`
+	TokensIn   int         `json:"tokens_in" doc:"Input tokens of the run, cached ones included; 0 when unknown"`
+	TokensOut  int         `json:"tokens_out" doc:"Output tokens of the run; 0 when unknown"`
+	Skills     []string    `json:"skills" doc:"Skills the agent loaded, unique, in order of first use; [] when none"`
+	StopReason string      `json:"stop_reason" doc:"How it stopped, e.g. success, error_max_turns, timeout, incomplete"`
 	Postmortem *Postmortem `json:"postmortem" doc:"Diagnosis of a failed run; null until analyze has run"` // null when there is none
 }
 
 type StepBrief struct {
 	N          int    `json:"n" doc:"Step number, starting at 1"`
-	Tool       string `json:"tool" doc:"Tool the agent called: Read, Edit, Bash, ..."`
+	Tool       string `json:"tool" doc:"Tool the agent called: Read, Edit, Bash, Shell, MCP, ..."`
+	Kind       string `json:"kind" doc:"What the call is, the same for every agent" enum:"shell,read,edit,search,skill,mcp,subagent,web,other"`
+	Name       string `json:"name,omitempty" doc:"Skill name, MCP tool as server.tool or subagent type; only for those kinds"`
 	Summary    string `json:"summary" doc:"One-line summary of the call"`
 	Error      bool   `json:"error" doc:"The tool result was an error"`
 	Denied     bool   `json:"denied" doc:"The call was blocked by permissions; error is also true"`
@@ -44,16 +49,20 @@ func (s Status) String() string {
 }
 
 func (r Run) Brief() RunBrief {
+	skills := r.Skills
+	if skills == nil {
+		skills = []string{}
+	}
 	return RunBrief{
 		ID: r.ID, Status: r.Status().String(), Task: r.Task, Agent: r.Agent,
 		Model: r.Model, Scenario: r.Scenario, Steps: len(r.Steps),
-		DurationMS: r.Duration.Milliseconds(), CostUSD: r.CostUSD,
+		DurationMS: r.Duration.Milliseconds(), CostUSD: r.CostUSD, TokensIn: r.TokensIn, TokensOut: r.TokensOut, Skills: skills,
 		StopReason: r.StopReason, Postmortem: r.Postmortem,
 	}
 }
 
 func (s Step) Brief() StepBrief {
-	return StepBrief{N: s.N, Tool: s.Tool, Summary: s.Summary, Error: s.IsError, Denied: s.Denied, DurationMS: s.Duration.Milliseconds()}
+	return StepBrief{N: s.N, Tool: s.Tool, Kind: s.Kind, Name: s.Name, Summary: s.Summary, Error: s.IsError, Denied: s.Denied, DurationMS: s.Duration.Milliseconds()}
 }
 
 func (s Stats) JSON() StatsJSON {

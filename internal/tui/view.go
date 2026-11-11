@@ -211,7 +211,7 @@ func (m Model) rightLines() []string {
 	word := map[trace.Status]string{trace.Passed: "✓ успех", trace.Failed: "✗ провал", trace.Running: "… идёт"}[r.Status()]
 	// Status right after the ID: truncation cuts the least important part last.
 	parts := []string{oneLine(r.ID), word}
-	for _, p := range []string{r.Model, r.Scenario, r.Task} {
+	for _, p := range []string{r.Agent, r.Model, r.Scenario, r.Task} {
 		if p != "" {
 			parts = append(parts, oneLine(p))
 		}
@@ -222,7 +222,11 @@ func (m Model) rightLines() []string {
 	} else {
 		title = dim.Render(title)
 	}
-	out := []string{title, ""}
+	out := []string{title}
+	if u := m.usageLine(); u != "" {
+		out = append(out, " "+u)
+	}
+	out = append(out, "")
 	if pm := m.pmBlock(); pm != nil {
 		for _, l := range pm {
 			out = append(out, " "+l)
@@ -233,6 +237,19 @@ func (m Model) rightLines() []string {
 		out = append(out, " "+l)
 	}
 	return out
+}
+
+// usageLine is the dim summary of what the run used; empty when it used nothing.
+func (m Model) usageLine() string {
+	r := m.selected()
+	if r == nil {
+		return ""
+	}
+	parts := r.UsedParts()
+	if len(parts) == 0 {
+		return ""
+	}
+	return dim.Render(fit(oneLine(strings.Join(parts, " · ")), m.rightW()))
 }
 
 // pmBlock is the pinned diagnosis of a failed run, cut with an ellipsis so that at
@@ -270,12 +287,16 @@ func (m Model) pmBlock() []string {
 	return lines
 }
 
-// pmHeight is the rows the pinned block takes in the right pane, with its blank separator.
+// pmHeight is the rows the usage line and the pinned block take in the right pane, with the block's blank separator.
 func (m Model) pmHeight() int {
+	h := 0
 	if n := len(m.pmBlock()); n > 0 {
-		return n + 1
+		h = n + 1
 	}
-	return 0
+	if m.usageLine() != "" {
+		h++ // the line between the title and the blank row
+	}
+	return h
 }
 
 func (m Model) stepRows() int { return max(1, m.bodyH()-paneHead-m.pmHeight()) }
@@ -312,7 +333,7 @@ func (m Model) stepRowLines(w int) []string {
 		if m.focus == focusSteps && i == m.step {
 			marker = "▶"
 		}
-		summary := oneLine(s.Line)
+		summary := oneLine(s.Text())
 		const tag, link = " · запрещено", " ← разбор"
 		lead, right := padLeft(fmt.Sprint(s.N), numW)+" ", padLeft(trace.FmtDuration(s.Duration), 6)
 		room := midWidth(w, lead, right) - toolW - 2

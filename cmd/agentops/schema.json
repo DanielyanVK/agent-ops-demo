@@ -166,7 +166,7 @@
           "type": "string"
         },
         "cost_usd": {
-          "description": "What the agent run cost, USD",
+          "description": "What the agent run cost, USD; 0 when the agent reports tokens only (codex)",
           "type": "number"
         },
         "duration_ms": {
@@ -196,6 +196,13 @@
           "description": "Recording scenario, e.g. baseline or no-edit",
           "type": "string"
         },
+        "skills": {
+          "description": "Skills the agent loaded, unique, in order of first use; [] when none",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "status": {
           "description": "Verdict of the original tests, never the agent's own claim",
           "enum": [
@@ -210,12 +217,20 @@
           "type": "integer"
         },
         "stop_reason": {
-          "description": "How the agent stopped: success, error_max_turns, timeout, incomplete",
+          "description": "How it stopped, e.g. success, error_max_turns, timeout, incomplete",
           "type": "string"
         },
         "task": {
           "description": "Name of the task the agent was given",
           "type": "string"
+        },
+        "tokens_in": {
+          "description": "Input tokens of the run, cached ones included; 0 when unknown",
+          "type": "integer"
+        },
+        "tokens_out": {
+          "description": "Output tokens of the run; 0 when unknown",
+          "type": "integer"
         }
       },
       "required": [
@@ -228,6 +243,9 @@
         "steps",
         "duration_ms",
         "cost_usd",
+        "tokens_in",
+        "tokens_out",
+        "skills",
         "stop_reason",
         "postmortem"
       ],
@@ -241,7 +259,7 @@
           "type": "string"
         },
         "cost_usd": {
-          "description": "What the agent run cost, USD",
+          "description": "What the agent run cost, USD; 0 when the agent reports tokens only (codex)",
           "type": "number"
         },
         "denials": {
@@ -259,6 +277,28 @@
           "description": "Run id, the directory name under runs/",
           "type": "string"
         },
+        "mcp": {
+          "description": "MCP tool calls per server.tool; [] when none",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "n": {
+                "description": "Number of calls",
+                "type": "integer"
+              },
+              "tool": {
+                "description": "Tool name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "tool",
+              "n"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
         "model": {
           "description": "Model the agent ran on",
           "type": "string"
@@ -277,6 +317,13 @@
         "scenario": {
           "description": "Recording scenario, e.g. baseline or no-edit",
           "type": "string"
+        },
+        "skills": {
+          "description": "Skills the agent loaded, unique, in order of first use; [] when none",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "status": {
           "description": "Verdict of the original tests, never the agent's own claim",
@@ -295,12 +342,24 @@
           "type": "array"
         },
         "stop_reason": {
-          "description": "How the agent stopped: success, error_max_turns, timeout, incomplete",
+          "description": "How it stopped, e.g. success, error_max_turns, timeout, incomplete",
           "type": "string"
+        },
+        "subagents": {
+          "description": "Number of subagent calls",
+          "type": "integer"
         },
         "task": {
           "description": "Name of the task the agent was given",
           "type": "string"
+        },
+        "tokens_in": {
+          "description": "Input tokens of the run, cached ones included; 0 when unknown",
+          "type": "integer"
+        },
+        "tokens_out": {
+          "description": "Output tokens of the run; 0 when unknown",
+          "type": "integer"
         },
         "verdict": {
           "anyOf": [
@@ -312,6 +371,10 @@
             }
           ],
           "description": "Result of the original tests; null while the run is going"
+        },
+        "web_calls": {
+          "description": "Number of web search and fetch calls",
+          "type": "integer"
         }
       },
       "required": [
@@ -324,9 +387,15 @@
         "steps",
         "duration_ms",
         "cost_usd",
+        "tokens_in",
+        "tokens_out",
+        "skills",
         "stop_reason",
         "postmortem",
         "denials",
+        "mcp",
+        "subagents",
+        "web_calls",
         "verdict",
         "steps"
       ],
@@ -363,9 +432,28 @@
               "description": "Full size of the input in bytes, before any cut",
               "type": "integer"
             },
+            "kind": {
+              "description": "What the call is, the same for every agent",
+              "enum": [
+                "shell",
+                "read",
+                "edit",
+                "search",
+                "skill",
+                "mcp",
+                "subagent",
+                "web",
+                "other"
+              ],
+              "type": "string"
+            },
             "n": {
               "description": "Step number, starting at 1",
               "type": "integer"
+            },
+            "name": {
+              "description": "Skill name, MCP tool as server.tool or subagent type; only for those kinds",
+              "type": "string"
             },
             "output": {
               "description": "Tool result as text; cut to --max-bytes",
@@ -380,7 +468,7 @@
               "type": "string"
             },
             "tool": {
-              "description": "Tool the agent called: Read, Edit, Bash, ...",
+              "description": "Tool the agent called: Read, Edit, Bash, Shell, MCP, ...",
               "type": "string"
             },
             "truncated": {
@@ -391,6 +479,7 @@
           "required": [
             "n",
             "tool",
+            "kind",
             "summary",
             "error",
             "denied",
@@ -468,22 +557,42 @@
           "description": "The tool result was an error",
           "type": "boolean"
         },
+        "kind": {
+          "description": "What the call is, the same for every agent",
+          "enum": [
+            "shell",
+            "read",
+            "edit",
+            "search",
+            "skill",
+            "mcp",
+            "subagent",
+            "web",
+            "other"
+          ],
+          "type": "string"
+        },
         "n": {
           "description": "Step number, starting at 1",
           "type": "integer"
+        },
+        "name": {
+          "description": "Skill name, MCP tool as server.tool or subagent type; only for those kinds",
+          "type": "string"
         },
         "summary": {
           "description": "One-line summary of the call",
           "type": "string"
         },
         "tool": {
-          "description": "Tool the agent called: Read, Edit, Bash, ...",
+          "description": "Tool the agent called: Read, Edit, Bash, Shell, MCP, ...",
           "type": "string"
         }
       },
       "required": [
         "n",
         "tool",
+        "kind",
         "summary",
         "error",
         "denied",

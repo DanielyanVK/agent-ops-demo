@@ -95,7 +95,11 @@ func runShow(args []string, stdout io.Writer) error {
 		if denials == nil {
 			denials = []string{}
 		}
-		return printJSON(stdout, showOutput{run.Brief(), denials, run.Verdict, steps})
+		mcp := run.MCP
+		if mcp == nil {
+			mcp = []trace.ToolCount{}
+		}
+		return printJSON(stdout, showOutput{run.Brief(), denials, mcp, run.Subagents, run.WebCalls, run.Verdict, steps})
 	}
 
 	info := []string{
@@ -103,6 +107,10 @@ func runShow(args []string, stdout io.Writer) error {
 		fmt.Sprintf("%d %s", len(run.Steps), trace.Plural(len(run.Steps), "шаг", "шага", "шагов")),
 		"остановка: " + run.StopReason,
 	}
+	if t := run.FmtTokens(); t != "" {
+		info = append(info, "токены: "+t)
+	}
+	info = append(info, run.UsedParts()...)
 	if b := run.Blocked(); len(b) > 0 {
 		info = append(info, "заблокировано: "+trace.FmtBlocked(b))
 	}
@@ -123,7 +131,7 @@ func runShow(args []string, stdout io.Writer) error {
 		if run.CauseStep(s) {
 			tag += " ← разбор"
 		}
-		fmt.Fprintf(stdout, "%*d %s %s %s %6s%s\n", numW, s.N, mark, padRight(oneLine(s.Tool), toolW), padRight(oneLine(s.Summary), 60),
+		fmt.Fprintf(stdout, "%*d %s %s %s %6s%s\n", numW, s.N, mark, padRight(oneLine(s.Tool), toolW), padRight(oneLine(s.ShortText()), 60),
 			trace.FmtDuration(s.Duration), tag)
 	}
 	return nil

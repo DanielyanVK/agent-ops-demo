@@ -93,6 +93,32 @@ func FmtBlocked(b []ToolCount) string {
 	return strings.Join(parts, ", ")
 }
 
+// FmtTokens renders "86212 → 840"; empty when the agent reported no tokens.
+func (r Run) FmtTokens() string {
+	if r.TokensIn == 0 && r.TokensOut == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d → %d", r.TokensIn, r.TokensOut)
+}
+
+// UsedParts lists what the run used, only the non-empty kinds: skills, MCP tools, subagents, web calls.
+func (r Run) UsedParts() []string {
+	var parts []string
+	if len(r.Skills) > 0 {
+		parts = append(parts, "навыки: "+strings.Join(r.Skills, ", "))
+	}
+	if len(r.MCP) > 0 {
+		parts = append(parts, "MCP: "+FmtBlocked(r.MCP))
+	}
+	if r.Subagents > 0 {
+		parts = append(parts, fmt.Sprintf("подагенты: %d", r.Subagents))
+	}
+	if r.WebCalls > 0 {
+		parts = append(parts, fmt.Sprintf("веб: %d", r.WebCalls))
+	}
+	return parts
+}
+
 // Clean makes agent-controlled text safe to print on a terminal: escape
 // sequences and control characters are dropped (they could clear the screen or
 // set the window title), tabs become four spaces, newlines stay.

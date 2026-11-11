@@ -12,9 +12,12 @@ type lsOutput struct {
 
 type showOutput struct {
 	trace.RunBrief
-	Denials []string          `json:"denials" doc:"Tools blocked by permissions, in order of first appearance"`
-	Verdict *trace.Verdict    `json:"verdict" doc:"Result of the original tests; null while the run is going"`
-	Steps   []trace.StepBrief `json:"steps" doc:"Tool calls of the run, without their text"`
+	Denials   []string          `json:"denials" doc:"Tools blocked by permissions, in order of first appearance"`
+	MCP       []trace.ToolCount `json:"mcp" doc:"MCP tool calls per server.tool; [] when none"`
+	Subagents int               `json:"subagents" doc:"Number of subagent calls"`
+	WebCalls  int               `json:"web_calls" doc:"Number of web search and fetch calls"`
+	Verdict   *trace.Verdict    `json:"verdict" doc:"Result of the original tests; null while the run is going"`
+	Steps     []trace.StepBrief `json:"steps" doc:"Tool calls of the run, without their text"`
 }
 
 type stepDetail struct {

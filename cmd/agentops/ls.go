@@ -77,10 +77,10 @@ func runLs(args []string, stdout, stderr io.Writer) error {
 	// tabwriter aligns whole tables only, so numeric columns are right-aligned by hand
 	// (widest values: "1м 05с", "$0.0043").
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "ID\tСТАТУС\tСЦЕНАРИЙ\tМОДЕЛЬ\t%5s\t%6s\t%7s\n", "ШАГОВ", "ВРЕМЯ", "ЦЕНА")
+	fmt.Fprintf(tw, "ID\tСТАТУС\tСЦЕНАРИЙ\tАГЕНТ\tМОДЕЛЬ\t%5s\t%6s\t%7s\n", "ШАГОВ", "ВРЕМЯ", "ЦЕНА")
 	for _, r := range shown {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%5d\t%6s\t%7s\n", r.ID, r.Status().Glyph(), r.Scenario,
-			r.Model, len(r.Steps), trace.FmtDuration(r.Duration), trace.FmtCost(r.CostUSD))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%5d\t%6s\t%7s\n", r.ID, r.Status().Glyph(), r.Scenario,
+			r.Agent, r.Model, len(r.Steps), trace.FmtDuration(r.Duration), trace.FmtCost(r.CostUSD))
 	}
 	return tw.Flush()
 }
