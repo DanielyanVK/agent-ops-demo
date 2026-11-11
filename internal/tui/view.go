@@ -280,7 +280,11 @@ func (m Model) pmBlock() []string {
 	for _, p := range []string{where, "Причина: " + pm.Cause, "Что поправить: " + pm.Fix} {
 		lines = append(lines, strings.Split(ansi.Wrap(trace.Clean(p), w, ""), "\n")...)
 	}
-	if avail := max(1, m.bodyH()-paneHead-minStepRows-1); len(lines) > avail {
+	usage := 0
+	if m.usageLine() != "" {
+		usage = 1
+	}
+	if avail := max(1, m.bodyH()-paneHead-usage-minStepRows-1); len(lines) > avail {
 		lines = lines[:avail]
 		lines[avail-1] = ansi.Truncate(lines[avail-1], w-1, "") + "…"
 	}

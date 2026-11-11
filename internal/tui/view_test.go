@@ -293,3 +293,22 @@ func TestClickOnStepRowWithUsageLine(t *testing.T) {
 		t.Fatalf("click on a step row: focus %v step %d", m.focus, m.step)
 	}
 }
+
+func TestLongDiagnosisLeavesStepRowsNextToUsageLine(t *testing.T) {
+	root := usageRoot(t)
+	long := strings.Repeat("Очень длинная причина сбоя. ", 20)
+	pm := `{"failed_step":1,"cause":"` + long + `","fix":"` + long + `","source":"rule"}`
+	// run-01 failed, with a diagnosis
+	os.WriteFile(filepath.Join(root, "run-01", "meta.json"), []byte(`{"id":"run-01","task":"fix-tests","agent":"claude","model":"default","scenario":"skill","verdict":{"passed":false,"test_output":""}}`), 0o644)
+	os.WriteFile(filepath.Join(root, "run-01", "postmortem.json"), []byte(pm), 0o644)
+	m := sized(New(root), 80, 16)
+	if m.usageLine() == "" || len(m.pmBlock()) == 0 {
+		t.Fatal("fixture needs a usage line and a diagnosis")
+	}
+	if got := m.stepRows(); got < minStepRows {
+		t.Fatalf("%d step rows left, want at least %d", got, minStepRows)
+	}
+	if out := plain(m); !strings.Contains(out, "3 ✓ mcp__noti") {
+		t.Errorf("third step row not visible:\n%s", out)
+	}
+}

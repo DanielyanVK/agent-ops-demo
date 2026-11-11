@@ -21,22 +21,23 @@ for p in "$login" "$host" "${host%%.*}" "$full" "$gitname"; do
 done
 parts=()
 for p in "$HOME" "$gitemail" /Users/ /home/ /private/ /var/folders var-folders /tmp/claude- \
-  session_id request_id rate_limit credential '"plugins"' '"tools"'; do
+  session_id request_id rate_limit credential auth.json '"plugins"' '"tools"'; do
   if [ ${#p} -ge 3 ]; then parts+=(-e "$p"); fi
 done
 
-# Names of your own that the checks above cannot know (a machine, an employer):
-# AGENTOPS_LEAK_EXTRA="acme|corp-vpn", alternatives matched as substrings, in any case.
-if [ -n "${AGENTOPS_LEAK_EXTRA:-}" ]; then
-  IFS='|' read -ra extra <<<"$AGENTOPS_LEAK_EXTRA"
-  for p in "${extra[@]}"; do
-    if [ -n "$p" ]; then parts+=(-e "$p"); fi
-  done
+# Secrets, as regular expressions. AGENTOPS_LEAK_EXTRA adds your own names that
+# the checks above cannot know (a machine, an employer), also a regular
+# expression: AGENTOPS_LEAK_EXTRA="acme|corp-vpn[0-9]+". Matched in any case.
+re='sk-[A-Za-z0-9]{16,}|BEGIN [A-Z ]*PRIVATE KEY|Bearer [A-Za-z0-9._-]{16,}'
+if [[ "${AGENTOPS_LEAK_EXTRA:-}" =~ [^|] ]]; then
+  re="$re|(${AGENTOPS_LEAK_EXTRA})"
 fi
 
 # grep exits 1 when nothing matches; only 2 is an error.
 found() { grep -rilF "$@" -- "$dir" || [ $? -eq 1 ]; }
+foundre() { grep -rilE -e "$re" -- "$dir" || [ $? -eq 1 ]; }
 files=$({
+  foundre
   if [ ${#words[@]} -gt 0 ]; then found -w "${words[@]}"; fi
   found "${parts[@]}"
 } | sort -u)

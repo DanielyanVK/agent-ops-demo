@@ -336,8 +336,11 @@ func TestLeakcheckExtraPatterns(t *testing.T) {
 	if code, out := run(""); code != 0 {
 		t.Fatalf("clean without extras, got %d: %s", code, out)
 	}
-	if code, out := run("nothing-like-this|acme-corp"); code != 1 || !strings.Contains(out, "run-01/meta.json") {
+	if code, out := run("nothing-like-this|acme-c[o]rp"); code != 1 || !strings.Contains(out, "run-01/meta.json") {
 		t.Errorf("extra pattern ignored: %d %s", code, out)
+	}
+	if code, out := run("no-such-name-[0-9]+"); code != 0 {
+		t.Errorf("a regex that matches nothing: %d %s", code, out)
 	}
 	if code, out := run("|"); code != 0 {
 		t.Errorf("empty alternatives must match nothing: %d %s", code, out)
@@ -368,5 +371,29 @@ func TestSanitizeCodexFailedTurnRedactsAPIKeyError(t *testing.T) {
 	got := sanitizeCodex(`{"type":"turn.failed","error":{"message":"Incorrect API key provided: sk-proj-abcdefgh12345678 (org-ABCDEFGH1234)"}}`)
 	if strings.Contains(got, "abcdefgh") || strings.Contains(got, "ABCDEFGH") || !strings.Contains(got, "sk-…") {
 		t.Errorf("%s", got)
+	}
+}
+
+func TestLeakcheckSecretPatterns(t *testing.T) {
+	for content, want := range map[string]int{
+		`{"stderr":"key sk-abcdefghijklmnop1234"}`:                1,
+		`{"stderr":"key sk-… and sk-short"}`:                      0,
+		`{"stderr":"-----BEGIN RSA PRIVATE KEY-----"}`:            1,
+		`{"stderr":"Authorization: Bearer abcdefghijklmnop.q-r"}`: 1,
+		`{"stderr":"Bearer …"}`:                                   0,
+		`{"stderr":"read ~/.codex/auth.json"}`:                    1,
+	} {
+		dir := t.TempDir()
+		os.Mkdir(filepath.Join(dir, "run-01"), 0o755)
+		os.WriteFile(filepath.Join(dir, "run-01", "meta.json"), []byte(content), 0o644)
+		out, err := exec.Command("../../scripts/leakcheck.sh", dir).CombinedOutput()
+		code := 0
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			code = ee.ExitCode()
+		}
+		if code != want {
+			t.Errorf("%s: exit %d, want %d: %s", content, code, want, out)
+		}
 	}
 }
