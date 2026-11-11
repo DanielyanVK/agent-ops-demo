@@ -38,7 +38,7 @@ go build -o agentops ./cmd/agentops
 
 ## Просмотр через TUI
 
-![TUI: список прогонов слева; справа разбор упавшего прогона и его шаги](docs/tui.png)
+![TUI: слева семнадцать прогонов двух агентов; справа прогон с навыком и его шаги](docs/tui.png)
 
 ```
 docker run --rm -it agentops
