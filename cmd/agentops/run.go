@@ -28,7 +28,8 @@ func runRun(args []string, stdout io.Writer) error {
 	runsDir := runsFlag(fs)
 	testbed := fs.String("testbed", "testbed", "каталог тестового проекта")
 	scenarioName := fs.String("scenario", "baseline", "сценарий: "+runner.ScenarioNames())
-	model := fs.String("model", "haiku", "модель агента")
+	agent := fs.String("agent", "claude", "агент: claude, codex")
+	model := fs.String("model", "", "модель агента (claude: haiku; codex: по умолчанию свой)")
 	n := fs.Int("n", 1, "сколько прогонов выполнить")
 	asJSON := jsonFlag(fs)
 	rest, err := parseFlags(fs, args, stdout)
@@ -46,12 +47,19 @@ func runRun(args []string, stdout io.Writer) error {
 		return fmt.Errorf("неизвестный сценарий %q, доступны: %s", *scenarioName, runner.ScenarioNames())
 	}
 
+	if *agent != "claude" && *agent != "codex" {
+		return fmt.Errorf("неизвестный агент %q, доступны: claude, codex", *agent)
+	}
+	if *model == "" && *agent == "claude" {
+		*model = "haiku"
+	}
+
 	// Ctrl-C, kill or a closed terminal stop the agent and leave no half-recorded run behind.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	for range *n {
 		id, err := runner.Run(ctx, runner.Options{
-			RunsDir: *runsDir, TestbedDir: *testbed, Model: *model, Scenario: sc})
+			RunsDir: *runsDir, TestbedDir: *testbed, Agent: *agent, Model: *model, Scenario: sc})
 		if ctx.Err() != nil {
 			return exitCode(130)
 		}
@@ -63,9 +71,9 @@ func runRun(args []string, stdout io.Writer) error {
 			return err
 		}
 		if *asJSON {
-			err = printJSON(stdout, runOutput{id, r.Status().String(), sc.Name, *model})
+			err = printJSON(stdout, runOutput{id, r.Status().String(), sc.Name, r.Model})
 		} else {
-			_, err = fmt.Fprintf(stdout, "%s  %s  %s  %s\n", id, r.Status().Glyph(), sc.Name, *model)
+			_, err = fmt.Fprintf(stdout, "%s  %s  %s  %s\n", id, r.Status().Glyph(), sc.Name, r.Model)
 		}
 		if err != nil {
 			return err

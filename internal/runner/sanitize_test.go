@@ -318,3 +318,28 @@ func TestLeakcheck(t *testing.T) {
 		}
 	}
 }
+
+func TestLeakcheckExtraPatterns(t *testing.T) {
+	dir := t.TempDir()
+	os.Mkdir(filepath.Join(dir, "run-01"), 0o755)
+	os.WriteFile(filepath.Join(dir, "run-01", "meta.json"), []byte(`{"stderr":"vpn at Acme-Corp.example"}`), 0o644)
+	run := func(extra string) (int, string) {
+		cmd := exec.Command("../../scripts/leakcheck.sh", dir)
+		cmd.Env = append(os.Environ(), "AGENTOPS_LEAK_EXTRA="+extra)
+		out, err := cmd.CombinedOutput()
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return ee.ExitCode(), string(out)
+		}
+		return 0, string(out)
+	}
+	if code, out := run(""); code != 0 {
+		t.Fatalf("clean without extras, got %d: %s", code, out)
+	}
+	if code, out := run("nothing-like-this|acme-corp"); code != 1 || !strings.Contains(out, "run-01/meta.json") {
+		t.Errorf("extra pattern ignored: %d %s", code, out)
+	}
+	if code, out := run("|"); code != 0 {
+		t.Errorf("empty alternatives must match nothing: %d %s", code, out)
+	}
+}

@@ -3,6 +3,7 @@ package runner
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,7 +29,8 @@ import (
 type Options struct {
 	RunsDir    string
 	TestbedDir string
-	Model      string
+	Agent      string // "claude" (default) or "codex"
+	Model      string // empty for codex = the agent's own default
 	Scenario   Scenario
 }
 
@@ -52,6 +54,13 @@ var agentTimeout = 10 * time.Minute
 // Run records one run. Any failure before the final meta.json removes the run
 // directory: a run left without a verdict would show as running forever.
 func Run(ctx context.Context, o Options) (id string, err error) {
+	if o.Agent == "" {
+		o.Agent = "claude"
+	}
+	ag, err := checkAgent(o)
+	if err != nil {
+		return "", err
+	}
 	if fi, err := os.Stat(o.TestbedDir); err != nil || !fi.IsDir() {
 		return "", fmt.Errorf("каталог подопытного проекта не найден: %s", o.TestbedDir)
 	}
@@ -77,7 +86,7 @@ func Run(ctx context.Context, o Options) (id string, err error) {
 			os.RemoveAll(runDir)
 		}
 	}()
-	m := meta{ID: id, Task: "fix-tests", Agent: "claude", Model: o.Model, Scenario: o.Scenario.Name,
+	m := meta{ID: id, Task: "fix-tests", Agent: o.Agent, Model: cmp.Or(o.Model, "default"), Scenario: o.Scenario.Name,
 		Prompt: o.Scenario.Prompt, StartedAt: time.Now().UTC().Truncate(time.Second)}
 	if err := writeMeta(runDir, m); err != nil {
 		return id, err
@@ -89,7 +98,7 @@ func Run(ctx context.Context, o Options) (id string, err error) {
 		s.User, s.FullName = u.Username, u.Name
 	}
 	s.Host, _ = os.Hostname()
-	timedOut, stderr, err := runAgent(ctx, o, s, filepath.Join(runDir, "trace.jsonl"))
+	timedOut, stderr, err := runAgent(ctx, ag, o, s, filepath.Join(runDir, "trace.jsonl"))
 	if err != nil {
 		return id, err
 	}
@@ -150,10 +159,11 @@ func agentArgs(o Options) []string {
 // error: its trace gets a result line with subtype "timeout". stderr is the scrubbed tail of the
 // agent's stderr when it did not exit cleanly: a run that never got going
 // explains itself there.
-func runAgent(ctx context.Context, o Options, s Scrub, tracePath string) (timedOut bool, stderr string, err error) {
-	bin := os.Getenv("AGENTOPS_CLAUDE_BIN")
-	if bin == "" {
-		bin = "claude"
+func runAgent(ctx context.Context, ag agent, o Options, s Scrub, tracePath string) (timedOut bool, stderr string, err error) {
+	bin := cmp.Or(os.Getenv(ag.binEnv), ag.name)
+	args, env, err := ag.prepare(o, s.Workdir)
+	if err != nil {
+		return false, "", err
 	}
 	out, err := os.Create(tracePath)
 	if err != nil {
@@ -163,9 +173,9 @@ func runAgent(ctx context.Context, o Options, s Scrub, tracePath string) (timedO
 
 	actx, cancel := context.WithTimeout(ctx, agentTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(actx, bin, agentArgs(o)...)
+	cmd := exec.CommandContext(actx, bin, args...)
 	cmd.Dir = s.Workdir
-	cmd.Env = append(os.Environ(), "TZ=UTC") // tool output such as `ls -la` prints local time
+	cmd.Env = append(os.Environ(), env...)
 	// Its own process group: Ctrl-C reaches agentops only, and a cancel kills the
 	// agent together with the tools it started.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -192,12 +202,11 @@ func runAgent(ctx context.Context, o Options, s Scrub, tracePath string) (timedO
 	for {
 		line, rerr := r.ReadBytes('\n')
 		if line = bytes.TrimRight(line, "\r\n"); len(line) > 0 {
-			if clean := Sanitize(line, s); clean != nil {
+			if clean := ag.sanitize(line, s, time.Now()); clean != nil {
 				if _, copyErr = out.Write(append(clean, '\n')); copyErr != nil {
 					break
 				}
-				var h struct{ Type string }
-				sawResult = sawResult || json.Unmarshal(clean, &h) == nil && h.Type == "result"
+				sawResult = sawResult || ag.finished(clean)
 			}
 		}
 		if rerr != nil {
@@ -222,8 +231,7 @@ func runAgent(ctx context.Context, o Options, s Scrub, tracePath string) (timedO
 		return false, "", copyErr
 	// An agent that reported its result and then lingered keeps its own result.
 	case errors.Is(actx.Err(), context.DeadlineExceeded) && !sawResult:
-		_, err := fmt.Fprintf(out, `{"type":"result","subtype":"timeout","is_error":true,"duration_ms":%d}`+"\n",
-			time.Since(start).Milliseconds())
+		_, err := fmt.Fprintln(out, ag.timeoutLine(time.Since(start), time.Now()))
 		return true, stderr, err
 	}
 	return false, stderr, nil

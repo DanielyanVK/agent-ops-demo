@@ -92,3 +92,34 @@ func TestRunMissingTestbed(t *testing.T) {
 		t.Error("runs directory created")
 	}
 }
+
+func TestRunAgentFlag(t *testing.T) {
+	tmp := t.TempDir()
+	bin := filepath.Join(tmp, "fake-codex")
+	if err := os.WriteFile(bin, []byte("#!/bin/bash\necho '{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AGENTOPS_CODEX_BIN", bin)
+	t.Setenv("HOME", tmp)
+	runs := filepath.Join(tmp, "runs")
+	args := []string{"--runs", runs, "--testbed", "../../testbed", "--agent", "codex", "--scenario", "no-edit"}
+	var out bytes.Buffer
+	if err := runRun(args, &out); err != nil {
+		t.Fatal(err)
+	}
+	if want := "run-01  ✗  no-edit  default\n"; out.String() != want {
+		t.Errorf("got %q, want %q", out.String(), want)
+	}
+	meta, _ := os.ReadFile(filepath.Join(runs, "run-01", "meta.json"))
+	if !strings.Contains(string(meta), `"agent": "codex"`) {
+		t.Errorf("meta: %s", meta)
+	}
+
+	err := runRun(append(args[:6:6], "--scenario", "one-turn"), &out)
+	if err == nil || err.Error() != "сценарий one-turn не поддерживается агентом codex" {
+		t.Errorf("got %v", err)
+	}
+	if err := runRun([]string{"--runs", runs, "--agent", "gemini"}, &out); err == nil || !strings.Contains(err.Error(), "gemini") {
+		t.Errorf("got %v", err)
+	}
+}

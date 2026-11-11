@@ -25,6 +25,15 @@ for p in "$HOME" "$gitemail" /Users/ /home/ /private/ /var/folders var-folders /
   if [ ${#p} -ge 3 ]; then parts+=(-e "$p"); fi
 done
 
+# Names of your own that the checks above cannot know (a machine, an employer):
+# AGENTOPS_LEAK_EXTRA="acme|corp-vpn", alternatives matched as substrings, in any case.
+if [ -n "${AGENTOPS_LEAK_EXTRA:-}" ]; then
+  IFS='|' read -ra extra <<<"$AGENTOPS_LEAK_EXTRA"
+  for p in "${extra[@]}"; do
+    if [ -n "$p" ]; then parts+=(-e "$p"); fi
+  done
+fi
+
 # grep exits 1 when nothing matches; only 2 is an error.
 found() { grep -rilF "$@" -- "$dir" || [ $? -eq 1 ]; }
 files=$({
