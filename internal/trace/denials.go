@@ -2,6 +2,7 @@ package trace
 
 import (
 	"cmp"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -44,39 +45,90 @@ func ClassifyDenial(s Step, codex bool) (class string, items []string) {
 	switch {
 	case strings.Contains(s.Output, "contains multiple operations"):
 		_, parts, _ := strings.Cut(s.Output, "approval: ")
-		parts, _, _ = strings.Cut(parts, "\n")
-		for p := range strings.SplitSeq(parts, ", ") {
-			items = append(items, chainHeads(p, true)...)
+		var heads []string
+		for _, p := range splitParts(parts) {
+			heads = append(heads, chainHeads(p)...)
 		}
-		return DenyCompound, items
+		return DenyCompound, keepBlocked(heads)
 	case strings.Contains(s.Output, "can't be checked before it runs"):
 		return DenyVariable, nil
 	case strings.Contains(s.Output, "No such tool available"):
 		return DenyDisabled, []string{s.Tool}
 	case strings.Contains(s.Output, "requires approval"):
-		return DenyApproval, chainHeads(s.Line, true)
+		return DenyApproval, keepBlocked(chainHeads(s.Line))
 	case codex || strings.Contains(low, "operation not permitted") || strings.Contains(low, "read-only file system"):
 		if s.Kind != "shell" { // an edit has no command, only paths
 			return DenySandbox, []string{s.Tool}
 		}
-		if h := chainHeads(s.Line, false); len(h) > 0 {
-			return DenySandbox, h[:1]
-		}
-		return DenySandbox, nil
+		return DenySandbox, keepBlocked(chainHeads(s.Line))
 	}
 	return DenyOther, nil
 }
 
-// chainHeads splits a command on && || ; | outside quotes and returns the head
-// of every segment; with dropAllowed, `go test` is left out.
-func chainHeads(cmd string, dropAllowed bool) []string {
+// neverBlocked are heads that are allowed in these runs: they never count as
+// the blocked thing. `sed` without -i is a plain "sed".
+var neverBlocked = []string{"go test", "cat", "ls", "pwd", "echo", "printf", "head", "tail", "grep", "rg", "wc", "cd", "true", "sed"}
+
+// keepBlocked drops the heads that never count; when nothing is left it keeps
+// the last head rather than nothing.
+func keepBlocked(heads []string) []string {
+	var out []string
+	for _, h := range heads {
+		if !slices.Contains(neverBlocked, h) {
+			out = append(out, h)
+		}
+	}
+	if len(out) == 0 && len(heads) > 0 {
+		return heads[len(heads)-1:]
+	}
+	return out
+}
+
+var heredocRe = regexp.MustCompile(`<<-?\s*['"]?(\w+)`)
+
+// chainHeads returns the head of every segment of a command: segments are cut
+// at newlines and at && || ; | outside quotes; here-document bodies are skipped.
+func chainHeads(cmd string) []string {
+	var kept []string
+	for lines := strings.Split(cmd, "\n"); len(lines) > 0; lines = lines[1:] {
+		kept = append(kept, lines[0])
+		if m := heredocRe.FindStringSubmatch(lines[0]); m != nil {
+			i := 1
+			for i < len(lines) && strings.TrimSpace(lines[i]) != m[1] {
+				i++
+			}
+			lines = lines[min(i, len(lines)-1):]
+		}
+	}
 	var heads []string
-	for _, seg := range splitChain(cmd) {
-		if h := commandHead(seg); h != "" && !(dropAllowed && h == "go test") {
+	for _, seg := range splitChain(strings.Join(kept, "\n")) {
+		if h := commandHead(seg); h != "" {
 			heads = append(heads, h)
 		}
 	}
 	return heads
+}
+
+// splitParts cuts the list after "require approval:" on ", " outside quotes.
+func splitParts(s string) []string {
+	var parts []string
+	var quote byte
+	start := 0
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			}
+		case c == '\'' || c == '"':
+			quote = c
+		case c == ',' && i+1 < len(s) && s[i+1] == ' ':
+			parts = append(parts, s[start:i])
+			start = i + 2
+			i++
+		}
+	}
+	return append(parts, s[start:])
 }
 
 func splitChain(s string) []string {
@@ -91,7 +143,7 @@ func splitChain(s string) []string {
 			}
 		case c == '\'' || c == '"':
 			quote = c
-		case c == ';' || c == '|' || c == '&' && i+1 < len(s) && s[i+1] == '&':
+		case c == ';' || c == '|' || c == '\n' || c == '&' && i+1 < len(s) && s[i+1] == '&':
 			segs = append(segs, s[start:i])
 			start = i + 1 // a doubled || leaves an empty segment, skipped by the caller
 			if c == '&' {
@@ -103,10 +155,26 @@ func splitChain(s string) []string {
 }
 
 func commandHead(seg string) string {
-	words := strings.Fields(seg)
+	words := strings.Fields(strings.TrimSpace(seg))
+	if len(words) > 0 {
+		words[0] = strings.TrimLeft(words[0], "(")
+		last := len(words) - 1
+		words[last] = strings.TrimRight(words[last], ")")
+	}
 	for len(words) > 0 {
 		w := words[0]
-		if i := strings.IndexByte(w, '='); w == "env" || i > 0 && !strings.ContainsAny(w[:i], "/\"'") {
+		if w == "env" {
+			words = words[1:]
+			for len(words) > 0 && strings.HasPrefix(words[0], "-") {
+				skip := 1
+				if words[0] == "-u" && len(words) > 1 {
+					skip = 2
+				}
+				words = words[skip:]
+			}
+			continue
+		}
+		if i := strings.IndexByte(w, '='); i > 0 && !strings.ContainsAny(w[:i], "/\"'") {
 			words = words[1:]
 			continue
 		}
@@ -207,9 +275,9 @@ func (r DenialReason) Hint() string {
 	switch r.Class {
 	case DenyCompound:
 		if items == "" {
-			return "Run one command per call: do not chain several commands with && ; or | — the whole call is rejected when any part needs approval."
+			return "Run one command per call: a chained call is rejected when any part of it needs approval."
 		}
-		return "Run one command per call: do not chain " + items + " with other commands using && ; or | — the whole call is rejected when any part needs approval."
+		return "Do not call " + items + ": they need approval in this environment, and one such part gets a whole chained call rejected. Run one allowed command per call."
 	case DenyVariable:
 		return "Do not use shell loops or variables to handle several files in one call; read each file with the file-reading tool and run each command separately."
 	case DenyDisabled:

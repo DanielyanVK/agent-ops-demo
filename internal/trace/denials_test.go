@@ -18,7 +18,14 @@ func TestClassifyDenial(t *testing.T) {
 		{"plural parts", Step{Output: "This Bash command contains multiple operations. The following parts require approval: python3 -, gofmt -l ., go vet ./..."}, false, "compound", []string{"python3", "gofmt", "go vet"}},
 		{"sed with pipes in quotes", Step{Output: "This Bash command contains multiple operations. The following part requires approval: sed -i 's|a|b|' cart.go"}, false, "compound", []string{"sed -i"}},
 		{"chain drops go test", Step{Output: "contains multiple operations. The following part requires approval: gofmt -l . ; go vet ./... && go test -v ./... 2>&1"}, false, "compound", []string{"gofmt", "go vet"}},
-		{"env prefix", Step{Output: "contains multiple operations. The following part requires approval: GOCACHE=/x env FOO=1 go build ./... || true"}, false, "compound", []string{"go build", "true"}},
+		{"env prefix", Step{Output: "contains multiple operations. The following part requires approval: GOCACHE=/x env FOO=1 go build ./... || true"}, false, "compound", []string{"go build"}},
+		{"multi-line with here-document", Step{Output: "This Bash command contains multiple operations. The following part requires approval: sed -i 's|a, b|c|' cart.go\nsed -i 's|x|y|' stats.go\npython3 - <<'E'\np='text.go'\ncat /etc/passwd; rm -rf x\nE\ngo test ./... 2>&1 | tail"}, false, "compound", []string{"sed -i", "sed -i", "python3"}},
+		{"here-document with dash and quotes", Step{Output: "contains multiple operations. The following part requires approval: cat <<-\"EOF\" > f\n\tgit push\n\tEOF\nmake"}, false, "compound", []string{"make"}},
+		{"never-blocked heads", Step{Output: "contains multiple operations. The following parts require approval: cat a, ls, sed 's/a/b/' f, head x | grep y"}, false, "compound", []string{"grep"}},
+		{"parts split outside quotes only", Step{Output: "contains multiple operations. The following parts require approval: sed -i 's|a, b|c|' f, gofmt -l ."}, false, "compound", []string{"sed -i", "gofmt"}},
+		{"subshell", Step{Output: "contains multiple operations. The following part requires approval: (cd d && make)"}, false, "compound", []string{"make"}},
+		{"env options", Step{Output: "contains multiple operations. The following part requires approval: env -i -u HOME -- go build"}, false, "compound", []string{"go build"}},
+		{"sandbox all segments", Step{Kind: "shell", Line: "pwd && rg --files . && go test ./...", Output: "operation not permitted"}, false, "sandbox", []string{"go test"}},
 		{"variable", Step{Output: "A variable in this command can't be checked before it runs"}, false, "variable", nil},
 		{"disabled", Step{Tool: "Edit", Output: "<tool_use_error>Error: No such tool available: Edit. Edit is disabled for this session, in subagents as well as here.</tool_use_error>"}, false, "disabled", []string{"Edit"}},
 		{"approval", Step{Line: "rm -rf build", Output: "This command requires approval"}, false, "approval", []string{"rm"}},
@@ -90,8 +97,8 @@ func TestHints(t *testing.T) {
 		r    DenialReason
 		want string
 	}{
-		{DenialReason{Class: "compound", Items: items("go vet", "gofmt")}, "Run one command per call: do not chain `go vet`, `gofmt` with other commands using && ; or | — the whole call is rejected when any part needs approval."},
-		{DenialReason{Class: "compound"}, "Run one command per call: do not chain several commands with && ; or | — the whole call is rejected when any part needs approval."},
+		{DenialReason{Class: "compound", Items: items("go vet", "gofmt")}, "Do not call `go vet`, `gofmt`: they need approval in this environment, and one such part gets a whole chained call rejected. Run one allowed command per call."},
+		{DenialReason{Class: "compound"}, "Run one command per call: a chained call is rejected when any part of it needs approval."},
 		{DenialReason{Class: "variable"}, "Do not use shell loops or variables to handle several files in one call; read each file with the file-reading tool and run each command separately."},
 		{DenialReason{Class: "disabled", Items: items("Edit")}, "The `Edit` tool is disabled in this environment: if the task cannot be done without it, say so and stop instead of trying the same change through the shell."},
 		{DenialReason{Class: "disabled"}, "A tool the task needs is disabled in this environment: if the task cannot be done without it, say so and stop instead of trying the same change through the shell."},

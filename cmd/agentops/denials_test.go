@@ -59,7 +59,7 @@ func TestDenialsRecordedRuns(t *testing.T) {
 func TestDenialsHuman(t *testing.T) {
 	dir := pickRuns(t, "run-01", "run-11")
 	out := denialsOut(t, "--runs", dir)
-	for _, want := range []string{"Отказы: ", "ПРИЧИНА", "ВЫЗОВОВ", "составная команда", "АГЕНТ", "claude  baseline", "claude  skill", "Подсказка агенту:\n- Run one command per call"} {
+	for _, want := range []string{"Отказы: ", "ПРИЧИНА", "ВЫЗОВОВ", "составная команда", "АГЕНТ", "claude  baseline", "claude  skill", "Подсказка агенту:\n- Do not call `go vet`"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("no %q in:\n%s", want, out)
 		}
@@ -96,7 +96,7 @@ func TestDenialsHints(t *testing.T) {
 	dir := pickRuns(t, "run-01", "run-15")
 	out := denialsOut(t, "--runs", dir, "--hints")
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if len(lines) != 3 || strings.HasPrefix(out, "-") || !strings.Contains(lines[0], "read-only") || !strings.HasPrefix(lines[1], "Run one command per call") {
+	if len(lines) != 3 || strings.HasPrefix(out, "-") || !strings.Contains(lines[0], "read-only") || !strings.HasPrefix(lines[1], "Do not call `go vet`") {
 		t.Errorf("hints:\n%s", out)
 	}
 	if out := denialsOut(t, "--runs", pickRuns(t, "run-11"), "--hints"); out != "" {
