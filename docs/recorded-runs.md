@@ -72,3 +72,36 @@
 - **`run-15` (`no-edit`, песочница только для чтения).** `why`: «Сбой не привязан к одному шагу» — «Рабочая директория и кэш Go смонтированы только для чтения: apply_patch был отклонён, а go test не может создать временный каталог сборки, поэтому исправления не применились, хотя баги найдены». Что поправить: дать запись в рабочую директорию и в каталог GOCACHE/GOTMPDIR и разрешить apply_patch; задание менять не нужно. Три из четырёх шагов (`Shell`) помечены `denied`. Агент остановился со статусом `success`, а исходные тесты красные.
 - **`run-17` (`bad-task`).** `why`: тоже «Сбой не привязан к одному шагу». Причина: задание требует, чтобы `go test ./...` прошёл, и запрещает трогать другие файлы, а падающие тесты `TestTotal` и `TestTruncate` зависят от багов в `cart.go` и `text.go`; агент исправил только `stats.go` и выполнить требование не мог. Это тот же диагноз, что у `run-09` и `run-10` у Claude.
 - **Цена.** Четыре разбора модели (`run-09`, `run-10`, `run-15`, `run-17`) стоили вместе $0.0033 из $0.0972 всего; два остальных провала (`run-06`, `run-08`) разобраны правилами бесплатно.
+
+## Отказы и подсказка агенту
+
+`agentops denials` собирает заблокированные вызовы всех 17 прогонов по причинам и по агентам и сценариям; текст ниже — его вывод без изменений.
+
+```
+Отказы: 19 из 138 шагов (13%) в 10 из 17 прогонов
+
+ПРИЧИНА                        ВЫЗОВОВ  ПРОГОНОВ  ЧТО
+составная команда                    9         7  go vet ×6, sed -i ×6, gofmt ×4, python3 ×2, cat
+переменная или цикл в команде        4         4
+инструмент отключён                  3         1  Edit ×3
+песочница запрещает запись           3         1  git status, go test, pwd
+```
+
+Сценарии `claude baseline` и `claude skill` рядом (остальные строки таблицы — в полном выводе):
+
+```
+АГЕНТ   СЦЕНАРИЙ   ПРОГОНОВ  ШАГОВ  ОТКАЗОВ  НА ПРОГОН
+claude  baseline          5     48        8        1.6
+claude  skill             2     26        0          0
+```
+
+Подсказка, которую печатает `denials --hints`:
+
+```
+Run one command per call: do not chain `go vet`, `sed -i`, `gofmt`, `python3`, `cat` with other commands using && ; or | — the whole call is rejected when any part needs approval.
+Do not use shell loops or variables to handle several files in one call; read each file with the file-reading tool and run each command separately.
+The `Edit` tool is disabled in this environment: if the task cannot be done without it, say so and stop instead of trying the same change through the shell.
+The workspace is read-only in this environment: commands that write files, build caches or temporary directories fail, so report what you would change instead of retrying.
+```
+
+Чаще всего агент упирается в составные команды (9 из 19 вызовов в 7 прогонах); с навыком `go-test-fixer` у Claude отказов нет (0 на 26 шагов против 8 на 48 в `baseline`).
